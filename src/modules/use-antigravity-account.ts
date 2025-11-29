@@ -1,10 +1,10 @@
-import {create} from 'zustand';
-import {invoke} from '@tauri-apps/api/core';
-import {logger} from '../utils/logger.ts';
-import type {AntigravityCurrentUserInfo, BackupCurrentAccountResult} from '../types/tauri.ts';
-import {AccountCommands} from '@/commands/AccountCommands.ts';
-import type {AntigravityAccount, AntigravityAuthInfo} from '@/commands/types/account.types.ts';
-import {BackupCommands} from "@/commands/BackupCommands.ts";
+import { create } from 'zustand';
+import { invoke } from '@tauri-apps/api/core';
+import { logger } from '../utils/logger.ts';
+import type { AntigravityCurrentUserInfo, BackupCurrentAccountResult } from '../types/tauri.ts';
+import { AccountCommands } from '@/commands/AccountCommands.ts';
+import type { AntigravityAccount, AntigravityAuthInfo } from '@/commands/types/account.types.ts';
+import { BackupCommands } from "@/commands/BackupCommands.ts";
 
 // 常量定义
 const FILE_WRITE_DELAY_MS = 500; // 等待文件写入完成的延迟时间
@@ -124,6 +124,10 @@ export const useAntigravityAccount = create<AntigravityAccountState & Antigravit
       });
 
       logger.info('切换用户成功', { module: 'UserManagement', email, result });
+
+      // 切换成功后刷新状态
+      await get().updateCurrentAccount();
+      await get().getUsers();
     } catch (error) {
       logger.error('切换用户失败', {
         module: 'UserManagement',

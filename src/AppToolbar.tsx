@@ -1,25 +1,28 @@
-import React, {useCallback, useState} from 'react';
-import {Download, Plus, Upload} from 'lucide-react';
+import React, { useCallback, useState } from 'react';
+import { Download, Plus, Upload, Key, Settings, Zap } from 'lucide-react';
 import BusinessUpdateDialog from './components/business/UpdateDialog.tsx';
 import BusinessConfirmDialog from './components/business/ConfirmDialog.tsx';
 import BusinessActionButton from './components/business/ActionButton.tsx';
 import ToolbarTitle from './components/ui/toolbar-title.tsx';
-import {useUpdateChecker} from './hooks/useUpdateChecker.ts';
-import {useAntigravityAccount} from '@/modules/use-antigravity-account.ts';
-import {logger} from './utils/logger.ts';
+import { useUpdateChecker } from './hooks/useUpdateChecker.ts';
+import { useAntigravityAccount } from '@/modules/use-antigravity-account.ts';
+import { logger } from './utils/logger.ts';
 import toast from 'react-hot-toast';
-import {useImportExportAccount} from "@/modules/use-import-export-accounts.ts";
-import {useAntigravityProcess} from "@/hooks/use-antigravity-process.ts";
+import { useImportExportAccount } from "@/modules/use-import-export-accounts.ts";
+import { useAntigravityProcess } from "@/hooks/use-antigravity-process.ts";
 import ImportPasswordDialog from "@/components/ImportPasswordDialog.tsx";
 import ExportPasswordDialog from "@/components/ExportPasswordDialog.tsx";
 import BusinessSettingsDialog from "@/components/business/SettingsDialog.tsx";
+import CardKeyLoginDialog from "@/components/CardKeyLoginDialog.tsx";
+import { BaseButton } from '@/components/base-ui/BaseButton';
 
 const AppToolbar = () => {
 
   // ========== 应用状态 ==========
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isCardKeyLoginOpen, setIsCardKeyLoginOpen] = useState(false);
 
-  
+
   const antigravityAccount = useAntigravityAccount();
   const importExportAccount = useImportExportAccount();
   // 使用单独的选择器避免无限循环
@@ -48,7 +51,7 @@ const AppToolbar = () => {
   const handleExportConfig = () => importExportAccount.exportConfig();
 
   // 进程管理
-  const {isProcessLoading, backupAndRestartAntigravity} = useAntigravityProcess();
+  const { isProcessLoading, backupAndRestartAntigravity } = useAntigravityProcess();
 
   // 计算全局加载状态
   const isAnyLoading = isProcessLoading || isImporting || isExporting;
@@ -66,7 +69,7 @@ const AppToolbar = () => {
     onConfirm: () => { }
   });
 
-  
+
   // 处理登录新账户按钮点击
   const handleBackupAndRestartClick = () => {
     logger.info('用户点击登录新账户按钮，显示确认对话框', {
@@ -90,8 +93,8 @@ const AppToolbar = () => {
       onConfirm: async () => {
         logger.info('用户确认登录新账户操作', {
           module: 'AppToolbar',
-        action: 'backup_and_restart_confirmed'
-      });
+          action: 'backup_and_restart_confirmed'
+        });
         setConfirmDialog(prev => ({ ...prev, isOpen: false }));
         backupAndRestartAntigravity();
       }
@@ -150,82 +153,104 @@ const AppToolbar = () => {
 
   const handleSubmitImportPassword = (password: string) => {
     importExportAccount.submitImportPassword(password)
-    .then(() => {
-      antigravityAccount.getUsers()
-    })
+      .then(() => {
+        antigravityAccount.getUsers()
+      })
   };
 
-  
+
   return (
     <>
-      <div className="toolbar bg-gradient-to-r from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-900 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-50 backdrop-blur-sm shadow-sm">
-        <div className="toolbar-content max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center flex-row">
-              <ToolbarTitle
-                updateState={updateState}
-                downloadProgress={downloadProgress}
-                onUpdateClick={handleUpdateBadgeClick}
-              />
-            </div>
-
-            <div className="flex items-center gap-2">
-
-              {/* 操作按钮 */}
-              <BusinessActionButton
-                onClick={handleBackupAndRestartClick}
-                variant="default"
-                icon={<Plus className="h-4 w-4" />}
-                tooltip="关闭 Antigravity，备份当前用户，清除用户信息，并自动重新启动"
-                isLoading={isProcessLoading}
-                loadingText="处理中..."
-                isAnyLoading={isAnyLoading}
-              >
-                登录新账户
-              </BusinessActionButton>
-
-              <BusinessActionButton
-                onClick={handleImportConfig}
-                variant="secondary"
-                icon={<Upload className="h-4 w-4" />}
-                tooltip="导入加密的配置文件"
-                isLoading={isImporting}
-                loadingText="导入中..."
-                isAnyLoading={isAnyLoading}
-              >
-                导入
-              </BusinessActionButton>
-
-              <BusinessActionButton
-                onClick={handleExportConfig}
-                variant="secondary"
-                icon={<Download className="h-4 w-4" />}
-                tooltip={antigravityAccount.users.length > 0 ? "导出为加密配置文件" : "没有用户信息可以导出"}
-                disabled={antigravityAccount.users.length === 0}
-                isLoading={isExporting || isCheckingData}
-                loadingText={isCheckingData ? "检查中..." : "导出中..."}
-                isAnyLoading={isAnyLoading}
-              >
-                导出
-              </BusinessActionButton>
-
-              {/* 设置按钮 */}
-              <button
-                onClick={() => setIsSettingsOpen(true)}
-                className="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-                title="设置"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                        d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-                </svg>
-              </button>
-            </div>
+      <header className="fixed top-0 left-0 right-0 h-[60px] bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 z-50 flex items-center justify-between px-6 shadow-sm">
+        {/* Left: Brand */}
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-white">
+            <Zap className="w-5 h-5 fill-current" />
           </div>
+          <h1 className="text-lg font-bold text-primary dark:text-white tracking-tight">
+            Antigravity Agent
+          </h1>
+          <div className="h-4 w-px bg-gray-300 dark:bg-gray-700 mx-2"></div>
+          <ToolbarTitle
+            updateState={updateState}
+            downloadProgress={downloadProgress}
+            onUpdateClick={handleUpdateBadgeClick}
+          />
         </div>
-      </div>
+
+        {/* Right: Actions */}
+        <div className="flex items-center gap-3">
+          <BusinessActionButton
+            onClick={() => setIsCardKeyLoginOpen(true)}
+            variant="default"
+            icon={<Key className="h-4 w-4" />}
+            tooltip="使用卡密登录并管理账号"
+            isLoading={false}
+            loadingText=""
+            isAnyLoading={isAnyLoading}
+            className="bg-purple-600 hover:bg-purple-700 text-white border-none shadow-sm h-9 px-4 rounded-md text-sm font-medium transition-colors"
+          >
+            卡密登录
+          </BusinessActionButton>
+
+          <BusinessActionButton
+            onClick={handleBackupAndRestartClick}
+            variant="default"
+            icon={<Plus className="h-4 w-4" />}
+            tooltip="关闭 Antigravity，备份当前用户，清除用户信息，并自动重新启动"
+            isLoading={isProcessLoading}
+            loadingText="处理中..."
+            isAnyLoading={isAnyLoading}
+            className="bg-white hover:bg-blue-50 text-blue-600 border border-blue-200 hover:border-blue-300 shadow-sm h-9 px-4 rounded-md text-sm font-medium transition-colors"
+          >
+            登录新账户
+          </BusinessActionButton>
+
+          <div className="flex items-center gap-1 bg-gray-50 dark:bg-gray-800 p-1 rounded-lg border border-gray-100 dark:border-gray-700 ml-2">
+            <BusinessActionButton
+              onClick={handleImportConfig}
+              variant="ghost"
+              icon={<Upload className="h-4 w-4" />}
+              tooltip="导入配置"
+              isLoading={isImporting}
+              loadingText=""
+              isAnyLoading={isAnyLoading}
+              className="h-8 w-8 p-0 text-gray-500 hover:text-primary hover:bg-white dark:hover:bg-gray-700 rounded-md"
+            >
+              {''}
+            </BusinessActionButton>
+
+            <BusinessActionButton
+              onClick={handleExportConfig}
+              variant="ghost"
+              icon={<Download className="h-4 w-4" />}
+              tooltip="导出配置"
+              disabled={antigravityAccount.users.length === 0}
+              isLoading={isExporting || isCheckingData}
+              loadingText=""
+              isAnyLoading={isAnyLoading}
+              className="h-8 w-8 p-0 text-gray-500 hover:text-primary hover:bg-white dark:hover:bg-gray-700 rounded-md"
+            >
+              {''}
+            </BusinessActionButton>
+          </div>
+
+          <div className="w-px h-6 bg-gray-200 dark:bg-gray-700 mx-1"></div>
+
+          <BaseButton
+            onClick={() => setIsSettingsOpen(true)}
+            variant="ghost"
+            size="icon"
+            className="h-9 w-9 text-gray-500 hover:text-primary hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+            title="设置"
+          >
+            <Settings className="w-5 h-5" />
+          </BaseButton>
+        </div>
+      </header>
+
+      {/* Spacer for fixed header */}
+      <div className="h-[60px]"></div>
 
       {/* 确认对话框 */}
       <BusinessConfirmDialog
@@ -241,13 +266,13 @@ const AppToolbar = () => {
         onCancel={() => {
           logger.info('用户取消了登录新账户操作', {
             module: 'AppToolbar',
-        action: 'backup_and_restart_cancelled'
-      });
+            action: 'backup_and_restart_cancelled'
+          });
           setConfirmDialog(prev => ({ ...prev, isOpen: false }));
         }}
       />
 
-  
+
       {/* 更新对话框 */}
       <BusinessUpdateDialog
         isOpen={isUpdateDialogOpen}
@@ -281,6 +306,11 @@ const AppToolbar = () => {
       <BusinessSettingsDialog
         isOpen={isSettingsOpen}
         onOpenChange={setIsSettingsOpen}
+      />
+
+      <CardKeyLoginDialog
+        isOpen={isCardKeyLoginOpen}
+        onOpenChange={setIsCardKeyLoginOpen}
       />
     </>
   );
