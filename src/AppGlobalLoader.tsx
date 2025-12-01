@@ -22,6 +22,5 @@ export const AppGlobalLoader = () => {
         <span className="text-sm font-medium text-gray-600 dark:text-gray-300">{loader.label}</span>
       </div>
     </div>
-
   );
 };
