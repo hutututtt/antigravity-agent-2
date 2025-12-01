@@ -1,5 +1,5 @@
 ﻿import React from 'react';
-import {useAppGlobalLoader} from "@/modules/use-app-global-loader.ts";
+import { useAppGlobalLoader } from "@/modules/use-app-global-loader.ts";
 
 export const AppGlobalLoader = () => {
   const loader = useAppGlobalLoader();
@@ -22,5 +22,6 @@ export const AppGlobalLoader = () => {
         <span className="text-sm font-medium text-gray-600 dark:text-gray-300">{loader.label}</span>
       </div>
     </div>
+
   );
 };
