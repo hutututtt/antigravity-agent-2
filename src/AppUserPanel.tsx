@@ -12,6 +12,8 @@ import { QuotaDashboard } from "@/components/business/QuotaDashboard";
 import { UserListItem } from "@/components/business/UserListItem.tsx";
 import { maskEmail } from "@/utils/username-masking.ts";
 import { useAppGlobalLoader } from "@/modules/use-app-global-loader.ts";
+import { useCardExpiration } from "@/hooks/useCardExpiration";
+import { AntigravityService } from "@/services/antigravity-service";
 
 export function AppUserPanel() {
   const [isUserDetailOpen, setIsUserDetailOpen] = useState(false);
@@ -21,6 +23,7 @@ export function AppUserPanel() {
   const { isLanguageServerStateInitialized } = useLanguageServerState();
   const currentAntigravityAccount = useCurrentAntigravityAccount();
   const appGlobalLoader = useAppGlobalLoader();
+  const { status: cardStatus } = useCardExpiration();
 
   // 用户详情处理
   const handleUserClick = useCallback((user: AntigravityAccount) => {
@@ -58,15 +61,19 @@ export function AppUserPanel() {
   useEffect(() => {
     const { currentAuthInfo, users, insertOrUpdateCurrent } = antigravityAccount;
 
-    // 如果当前有登录用户（有邮箱），但不在备份列表中，则自动备份
+    // 如果当前有登录用户（有邮箱），但不在备份列表中，且卡密未过期，则自动备份
     if (currentAuthInfo?.email && !users.find(u => u.email === currentAuthInfo.email)) {
+      if (cardStatus === 'expired') {
+        console.log('[AppUserPanel] 卡密已过期，跳过自动备份');
+        return;
+      }
       console.log('[AppUserPanel] 检测到新登录账户，正在自动备份...', currentAuthInfo.email);
       insertOrUpdateCurrent().catch(error => {
         console.error('[AppUserPanel] 自动备份失败:', error);
         toast.error('自动备份新账户失败');
       });
     }
-  }, [antigravityAccount.currentAuthInfo, antigravityAccount.users]);
+  }, [antigravityAccount.currentAuthInfo, antigravityAccount.users, cardStatus]);
 
   // 获取当前用户的配额数据
   const currentQuotaData = currentAntigravityAccount && languageServerUserInfo.users[currentAntigravityAccount?.id]?.userStatus
@@ -114,8 +121,14 @@ export function AppUserPanel() {
 
   const confirmClearAllBackups = async () => {
     try {
+      // 使用新的清除并重启逻辑 (不备份)
+      await AntigravityService.clearAndRestartAntigravity();
+
+      // 同步前端状态：清空用户列表并更新当前用户信息
       await antigravityAccount.clearAllUsers();
-      toast.success('所有备份已清除');
+      await antigravityAccount.updateCurrentAccount();
+
+      toast.success('所有数据已清除，应用已重置');
       setIsClearDialogOpen(false);
     } catch (error) {
       toast.error(`清除失败: ${error}`);
@@ -189,8 +202,8 @@ export function AppUserPanel() {
               <Cpu className="w-6 h-6" />
             </div>
             <div>
-              <div className="text-2xl font-bold text-gray-900">v2.0</div>
-              <div className="text-xs text-gray-500 font-medium">核心版本</div>
+              <div className="text-2xl font-bold text-gray-900">v1.0</div>
+              <div className="text-xs text-gray-500 font-medium">应用版本</div>
             </div>
           </div>
         </div>

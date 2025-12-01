@@ -29,12 +29,11 @@ pub(super) fn scan_process_for_token(
     let mut address: mach_vm_address_t = 0;
     let mut size: mach_vm_size_t = 0;
     let mut info = vm_region_basic_info_data_64_t::default();
-    let mut count = std::mem::size_of::<vm_region_basic_info_data_64_t>() as mach_msg_type_number_t
-        / std::mem::size_of::<integer_t>() as mach_msg_type_number_t;
+
     let mut object_name: mach_port_name_t = 0;
 
     while {
-        count = std::mem::size_of::<vm_region_basic_info_data_64_t>() as mach_msg_type_number_t
+        let mut count = std::mem::size_of::<vm_region_basic_info_data_64_t>() as mach_msg_type_number_t
             / std::mem::size_of::<integer_t>() as mach_msg_type_number_t;
         unsafe {
             mach_vm_region(

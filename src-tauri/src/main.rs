@@ -136,6 +136,7 @@ fn main() {
             list_antigravity_processes,
             start_antigravity,
             backup_and_restart_antigravity,
+            clear_and_restart_antigravity,
             // 平台支持命令
             get_platform_info,
             find_antigravity_installations,

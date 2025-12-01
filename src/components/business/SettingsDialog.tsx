@@ -1,15 +1,15 @@
-import React, {useEffect, useState} from 'react';
-import {AlertCircle, Check, FileCode, Info, Monitor, Settings, VolumeX} from 'lucide-react';
-import {open} from '@tauri-apps/plugin-dialog';
-import {getVersion} from '@tauri-apps/api/app';
-import {AntigravityPathService} from '../../services/antigravity-path-service';
-import {BaseDialog, BaseDialogContent, BaseDialogHeader, BaseDialogTitle,} from '@/components/base-ui/BaseDialog';
-import {BaseButton} from '@/components/base-ui/BaseButton';
-import {BaseSpinner} from '@/components/base-ui/BaseSpinner';
-import {SystemTrayService} from '../../services/system-tray-service';
-import {SilentStartService} from '../../services/silent-start-service';
-import {cn} from '@/utils/utils';
-import {logger} from '@/utils/logger';
+import React, { useEffect, useState } from 'react';
+import { AlertCircle, Check, FileCode, Info, Monitor, Settings, VolumeX } from 'lucide-react';
+import { open } from '@tauri-apps/plugin-dialog';
+import { getVersion } from '@tauri-apps/api/app';
+import { AntigravityPathService } from '../../services/antigravity-path-service';
+import { BaseDialog, BaseDialogContent, BaseDialogHeader, BaseDialogTitle, } from '@/components/base-ui/BaseDialog';
+import { BaseButton } from '@/components/base-ui/BaseButton';
+import { BaseSpinner } from '@/components/base-ui/BaseSpinner';
+import { SystemTrayService } from '../../services/system-tray-service';
+import { SilentStartService } from '../../services/silent-start-service';
+import { cn } from '@/utils/utils';
+import { logger } from '@/utils/logger';
 
 interface BusinessSettingsDialogProps {
   isOpen: boolean;
@@ -27,7 +27,7 @@ const BusinessSettingsDialog: React.FC<BusinessSettingsDialogProps> = ({
   const [messageType, setMessageType] = useState<'success' | 'error' | 'warning' | 'info'>('info');
   const [appVersion, setAppVersion] = useState<string>('');
 
-  
+
   // 系统托盘状态
   const [isSystemTrayEnabled, setIsSystemTrayEnabled] = useState(true);
   const [isTrayLoading, setIsTrayLoading] = useState(false);
@@ -86,7 +86,7 @@ const BusinessSettingsDialog: React.FC<BusinessSettingsDialogProps> = ({
     }
   };
 
-  
+
   const loadSystemTraySettings = async () => {
     try {
       const trayEnabled = await SystemTrayService.getSystemTrayState();
@@ -141,7 +141,7 @@ const BusinessSettingsDialog: React.FC<BusinessSettingsDialogProps> = ({
     }
   };
 
-  
+
   const handleBrowseExecPath = async () => {
     try {
       const result = await open({
@@ -231,7 +231,7 @@ const BusinessSettingsDialog: React.FC<BusinessSettingsDialogProps> = ({
             <div className="space-y-4">
               <div className="space-y-3">
                 <div className="group">
-                  <label className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1.5 block px-1">可执行文件</label>
+                  <label className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1.5 block px-1">Antigravity启动路径</label>
                   <div className="flex gap-2">
                     <div className="flex-1 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-md px-3 py-2 text-xs font-mono text-gray-600 dark:text-gray-400 break-all select-all transition-colors group-hover:border-gray-300 dark:group-hover:border-gray-700">
                       {execPath}

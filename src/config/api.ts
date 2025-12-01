@@ -1,8 +1,8 @@
 // API Configuration
 export const API_CONFIG = {
     // Default API base URL (can be overridden by environment variable)
-    BASE_URL: import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:3000',
-    // BASE_URL: import.meta.env.VITE_API_BASE_URL || 'http://47.93.28.155:3000',
+    // BASE_URL: import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:3000',
+    BASE_URL: import.meta.env.VITE_API_BASE_URL || 'http://47.93.28.155:3000',
 
     // API endpoints
     ENDPOINTS: {
@@ -10,6 +10,7 @@ export const API_CONFIG = {
         ACCOUNT_GET_PASSWORD: '/api/account/get-password',
         ACCOUNT_UPDATE_STATUS: '/api/account/update-status',
         AUTO_LOGIN: '/api/auto-login',
+        ACCOUNT_FEEDBACK: '/api/account/feedback',
     }
 };
 

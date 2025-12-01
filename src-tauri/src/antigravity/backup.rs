@@ -137,3 +137,31 @@ pub fn smart_backup_antigravity_account(email: &str) -> Result<(String, bool), S
     tracing::info!(target: "backup::database", action = %action, file = %backup_file.display(), "备份成功");
     Ok((backup_name, is_overwrite))
 }
+
+/// 清空所有备份
+pub fn clear_all_backups() -> Result<String, String> {
+    let config_dir = AppPaths::backup_dir().ok_or("无法获取备份目录")?;
+
+    if config_dir.exists() {
+        // 读取目录中的所有文件
+        let mut deleted_count = 0;
+        for entry in fs::read_dir(&config_dir).map_err(|e| format!("读取用户目录失败: {}", e))? {
+            let entry = entry.map_err(|e| format!("读取目录项失败: {}", e))?;
+            let path = entry.path();
+
+            // 只删除 JSON 文件
+            if path.extension().is_some_and(|ext| ext == "json") {
+                fs::remove_file(&path)
+                    .map_err(|e| format!("删除文件 {} 失败: {}", path.display(), e))?;
+                deleted_count += 1;
+            }
+        }
+
+        Ok(format!(
+            "已清空所有用户备份，共删除 {} 个文件",
+            deleted_count
+        ))
+    } else {
+        Ok("用户目录不存在，无需清空".to_string())
+    }
+}

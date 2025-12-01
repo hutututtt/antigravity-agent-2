@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Key, Copy, CheckCircle, Loader2, Mail, Lock, Shield, Clock, User, RefreshCw, Sparkles, Zap, Globe } from 'lucide-react';
+import { Key, Copy, CheckCircle, Loader2, Mail, Lock, Shield, Clock, User, RefreshCw, Sparkles, Zap, Globe, AlertTriangle } from 'lucide-react';
 import { BaseDialog, BaseDialogContent, BaseDialogHeader, BaseDialogTitle } from '@/components/base-ui/BaseDialog';
 import { BaseButton } from '@/components/base-ui/BaseButton';
 import { logger } from '@/utils/logger';
@@ -149,7 +149,14 @@ const CardKeyLoginDialog: React.FC<CardKeyLoginDialogProps> = ({
 
             setCardInfo(data.data.cardInfo);
             setAccounts(data.data.accountList);
+
+            // Close dialog immediately on success
+            onOpenChange(false);
+
             toast.success('卡密验证成功！');
+
+            // Dispatch event to notify other components (e.g., App.tsx to update card status)
+            window.dispatchEvent(new Event('antigravity_card_update'));
 
         } catch (error) {
             logger.error('卡密验证失败', { error });
@@ -166,7 +173,8 @@ const CardKeyLoginDialog: React.FC<CardKeyLoginDialogProps> = ({
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     accountId,
-                    status: 'in_use'
+                    status: 'in_use',
+                    cardCode: cardInput.trim()
                 }),
             });
 
@@ -205,7 +213,7 @@ const CardKeyLoginDialog: React.FC<CardKeyLoginDialogProps> = ({
             const response = await fetch(getApiUrl(API_CONFIG.ENDPOINTS.AUTO_LOGIN), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ accountId, debug: debugMode }),
+                body: JSON.stringify({ accountId, debug: debugMode, cardCode: cardInput.trim() }),
             });
 
             const data = await response.json();
@@ -219,6 +227,37 @@ const CardKeyLoginDialog: React.FC<CardKeyLoginDialogProps> = ({
         } catch (error) {
             logger.error('自动登录失败', { error });
             toast.error(error instanceof Error ? error.message : '自动登录失败', { id: 'auto-login' });
+        }
+    };
+
+    const handleReportInvalid = async (accountId: number) => {
+        if (!confirm('确定要反馈此账号失效吗？')) {
+            return;
+        }
+
+        try {
+            const response = await fetch(getApiUrl(API_CONFIG.ENDPOINTS.ACCOUNT_FEEDBACK), {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    accountId,
+                    cardCode: cardInput,
+                    feedbackType: 'expired'
+                }),
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                toast.success(data.message || '反馈提交成功');
+            } else {
+                toast.error(data.message || '反馈提交失败');
+            }
+        } catch (error) {
+            logger.error('反馈提交失败', { error });
+            toast.error('反馈提交失败');
         }
     };
 
@@ -245,7 +284,7 @@ const CardKeyLoginDialog: React.FC<CardKeyLoginDialogProps> = ({
                 <BaseDialogHeader className="px-6 py-4 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shrink-0">
                     <BaseDialogTitle className="text-lg font-bold text-primary dark:text-white flex items-center gap-2">
                         <Key className="h-5 w-5" />
-                        <span>卡密登录</span>
+                        <span>激活卡密</span>
                     </BaseDialogTitle>
                 </BaseDialogHeader>
 
@@ -484,6 +523,14 @@ const CardKeyLoginDialog: React.FC<CardKeyLoginDialogProps> = ({
                                                                     leftIcon={<CheckCircle size={14} />}
                                                                 >
                                                                     标记登录
+                                                                </BaseButton>
+                                                                <BaseButton
+                                                                    size="sm"
+                                                                    onClick={() => handleReportInvalid(account.id)}
+                                                                    className="bg-orange-600 hover:bg-orange-700 text-white shadow-sm transition-all"
+                                                                    leftIcon={<AlertTriangle size={14} />}
+                                                                >
+                                                                    反馈失效
                                                                 </BaseButton>
                                                             </>
                                                         )}

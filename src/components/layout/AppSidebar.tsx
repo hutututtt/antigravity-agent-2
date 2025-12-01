@@ -1,6 +1,7 @@
 import React from 'react';
-import { LayoutDashboard, Key, Settings, Zap, LogOut } from 'lucide-react';
+import { LayoutDashboard, Key, Settings, Zap, LogOut, Network, AlertCircle } from 'lucide-react';
 import { cn } from '@/utils/utils';
+import { ExpirationStatus } from '@/hooks/useCardExpiration';
 import { BaseButton } from '@/components/base-ui/BaseButton';
 
 interface AppSidebarProps {
@@ -8,24 +9,59 @@ interface AppSidebarProps {
     onViewChange: (view: 'dashboard' | 'settings') => void;
     onCardLogin: () => void;
     onLoginNew: () => void;
+    onNetworkCheck: () => void;
+    cardStatus?: ExpirationStatus;
+    onToggleImportExport?: () => void;
 }
 
 export const AppSidebar: React.FC<AppSidebarProps> = ({
     currentView,
     onViewChange,
     onCardLogin,
-    onLoginNew
+    onLoginNew,
+    onNetworkCheck,
+    cardStatus = 'valid',
+    onToggleImportExport
 }) => {
+    const [logoClickCount, setLogoClickCount] = React.useState(0);
+    const clickTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+
+    const handleLogoClick = () => {
+        if (!onToggleImportExport) return;
+
+        setLogoClickCount(prev => {
+            const newCount = prev + 1;
+
+            if (clickTimeoutRef.current) {
+                clearTimeout(clickTimeoutRef.current);
+            }
+
+            // Reset count if no click within 2 seconds
+            clickTimeoutRef.current = setTimeout(() => {
+                setLogoClickCount(0);
+            }, 2000);
+
+            if (newCount === 6) {
+                onToggleImportExport();
+                return 0;
+            }
+
+            return newCount;
+        });
+    };
     return (
         <div className="w-64 h-screen flex flex-col glass-panel border-r border-gray-200 rounded-none fixed left-0 top-0 z-50">
             {/* 品牌头部 */}
             <div className="h-20 flex items-center gap-3 px-6 border-b border-gray-200">
-                <div className="w-10 h-10 bg-gradient-to-br from-primary to-secondary rounded-xl flex items-center justify-center shadow-md">
+                <div
+                    onClick={handleLogoClick}
+                    className="w-10 h-10 bg-gradient-to-br from-primary to-secondary rounded-xl flex items-center justify-center shadow-md cursor-pointer active:scale-95 transition-transform select-none"
+                >
                     <Zap className="w-6 h-6 text-white fill-white" />
                 </div>
                 <div>
                     <h1 className="text-lg font-bold text-gray-900 tracking-tight">Antigravity</h1>
-                    <p className="text-[10px] text-gray-500 font-medium tracking-wide">智能代理 v2.0</p>
+                    {/* <p className="text-[10px] text-gray-500 font-medium tracking-wide">智能代理 v2.0</p> */}
                 </div>
             </div>
 
@@ -46,10 +82,16 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
 
                 <button
                     onClick={onCardLogin}
-                    className="nav-link w-full group"
+                    className="nav-link w-full group relative"
                 >
-                    <Key className="w-5 h-5 group-hover:text-secondary transition-colors" />
+                    <Key className="w-5 h-5 group-hover:text-purple-500 transition-colors" />
                     <span className="font-medium">卡密登录</span>
+                    {cardStatus !== 'valid' && (
+                        <span className={cn(
+                            "absolute right-2 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full",
+                            cardStatus === 'expired' ? "bg-red-500" : "bg-amber-500"
+                        )} />
+                    )}
                 </button>
 
                 <button
@@ -58,6 +100,14 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
                 >
                     <LogOut className="w-5 h-5 group-hover:text-primary transition-colors" />
                     <span className="font-medium">登录新账户</span>
+                </button>
+
+                <button
+                    onClick={onNetworkCheck}
+                    className="nav-link w-full group"
+                >
+                    <Network className="w-5 h-5 group-hover:text-blue-500 transition-colors" />
+                    <span className="font-medium">网络检测</span>
                 </button>
 
                 <button

@@ -16,7 +16,11 @@ import BusinessSettingsDialog from "@/components/business/SettingsDialog.tsx";
 import CardKeyLoginDialog from "@/components/CardKeyLoginDialog.tsx";
 import { BaseButton } from '@/components/base-ui/BaseButton';
 
-const AppToolbar = () => {
+interface AppToolbarProps {
+  showImportExport?: boolean;
+}
+
+const AppToolbar: React.FC<AppToolbarProps> = ({ showImportExport = false }) => {
 
   // ========== 应用状态 ==========
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -161,16 +165,9 @@ const AppToolbar = () => {
 
   return (
     <>
-      <header className="fixed top-0 left-0 right-0 h-[60px] bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 z-50 flex items-center justify-between px-6 shadow-sm">
-        {/* Left: Brand */}
+      <header className="fixed top-0 left-64 right-0 h-[60px] bg-white dark:bg-gray-900 dark:border-gray-800 z-40 flex items-center justify-between px-6 border-t">
+        {/* Left: Title/Status */}
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-white">
-            <Zap className="w-5 h-5 fill-current" />
-          </div>
-          <h1 className="text-lg font-bold text-primary dark:text-white tracking-tight">
-            Antigravity Agent
-          </h1>
-          <div className="h-4 w-px bg-gray-300 dark:bg-gray-700 mx-2"></div>
           <ToolbarTitle
             updateState={updateState}
             downloadProgress={downloadProgress}
@@ -180,19 +177,6 @@ const AppToolbar = () => {
 
         {/* Right: Actions */}
         <div className="flex items-center gap-3">
-          <BusinessActionButton
-            onClick={() => setIsCardKeyLoginOpen(true)}
-            variant="default"
-            icon={<Key className="h-4 w-4" />}
-            tooltip="使用卡密登录并管理账号"
-            isLoading={false}
-            loadingText=""
-            isAnyLoading={isAnyLoading}
-            className="bg-purple-600 hover:bg-purple-700 text-white border-none shadow-sm h-9 px-4 rounded-md text-sm font-medium transition-colors"
-          >
-            卡密登录
-          </BusinessActionButton>
-
           <BusinessActionButton
             onClick={handleBackupAndRestartClick}
             variant="default"
@@ -206,34 +190,36 @@ const AppToolbar = () => {
             登录新账户
           </BusinessActionButton>
 
-          <div className="flex items-center gap-1 bg-gray-50 dark:bg-gray-800 p-1 rounded-lg border border-gray-100 dark:border-gray-700 ml-2">
-            <BusinessActionButton
-              onClick={handleImportConfig}
-              variant="ghost"
-              icon={<Upload className="h-4 w-4" />}
-              tooltip="导入配置"
-              isLoading={isImporting}
-              loadingText=""
-              isAnyLoading={isAnyLoading}
-              className="h-8 w-8 p-0 text-gray-500 hover:text-primary hover:bg-white dark:hover:bg-gray-700 rounded-md"
-            >
-              {''}
-            </BusinessActionButton>
+          {showImportExport && (
+            <div className="flex items-center gap-1 bg-gray-50 dark:bg-gray-800 p-1 rounded-lg border border-gray-100 dark:border-gray-700 ml-2">
+              <BusinessActionButton
+                onClick={handleImportConfig}
+                variant="ghost"
+                icon={<Upload className="h-4 w-4" />}
+                tooltip="导入配置"
+                isLoading={isImporting}
+                loadingText=""
+                isAnyLoading={isAnyLoading}
+                className="h-8 w-8 p-0 text-gray-500 hover:text-primary hover:bg-white dark:hover:bg-gray-700 rounded-md"
+              >
+                {''}
+              </BusinessActionButton>
 
-            <BusinessActionButton
-              onClick={handleExportConfig}
-              variant="ghost"
-              icon={<Download className="h-4 w-4" />}
-              tooltip="导出配置"
-              disabled={antigravityAccount.users.length === 0}
-              isLoading={isExporting || isCheckingData}
-              loadingText=""
-              isAnyLoading={isAnyLoading}
-              className="h-8 w-8 p-0 text-gray-500 hover:text-primary hover:bg-white dark:hover:bg-gray-700 rounded-md"
-            >
-              {''}
-            </BusinessActionButton>
-          </div>
+              <BusinessActionButton
+                onClick={handleExportConfig}
+                variant="ghost"
+                icon={<Download className="h-4 w-4" />}
+                tooltip="导出配置"
+                disabled={antigravityAccount.users.length === 0}
+                isLoading={isExporting || isCheckingData}
+                loadingText=""
+                isAnyLoading={isAnyLoading}
+                className="h-8 w-8 p-0 text-gray-500 hover:text-primary hover:bg-white dark:hover:bg-gray-700 rounded-md"
+              >
+                {''}
+              </BusinessActionButton>
+            </div>
+          )}
 
           <div className="w-px h-6 bg-gray-200 dark:bg-gray-700 mx-1"></div>
 

@@ -198,4 +198,77 @@ pub async fn backup_and_restart_antigravity() -> Result<String, String> {
     Ok(final_message)
 }
 
+/// 清除所有数据并重启 Antigravity (不备份)
+#[tauri::command]
+pub async fn clear_and_restart_antigravity() -> Result<String, String> {
+    println!("🔄 开始执行 clear_and_restart_antigravity 命令");
+
+    // 1. 关闭进程 (如果存在)
+    println!("🛑 步骤1: 检查并关闭 Antigravity 进程");
+    let kill_result = match crate::platform::kill_antigravity_processes() {
+        Ok(result) => {
+            if result.contains("not found") || result.contains("未找到") {
+                println!("ℹ️ Antigravity 进程未运行，跳过关闭步骤");
+                "Antigravity 进程未运行".to_string()
+            } else {
+                println!("✅ 进程关闭结果: {}", result);
+                result
+            }
+        }
+        Err(e) => {
+            if e.contains("not found") || e.contains("未找到") {
+                println!("ℹ️ Antigravity 进程未运行，跳过关闭步骤");
+                "Antigravity 进程未运行".to_string()
+            } else {
+                return Err(format!("关闭进程时发生错误: {}", e));
+            }
+        }
+    };
+
+    // 等待500ms确保进程完全关闭
+    tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+
+    // 2. 清除所有备份 (根据需求，过期/重置时应清除所有数据)
+    println!("🗑️ 步骤2: 清除所有备份文件");
+    if let Err(e) = crate::antigravity::backup::clear_all_backups() {
+        println!("⚠️ 清除备份失败: {}", e);
+    }
+
+    // 3. 清除 Antigravity 所有数据 (彻底注销)
+    println!("🗑️ 步骤3: 清除所有 Antigravity 数据 (彻底注销)");
+    match crate::antigravity::cleanup::clear_all_antigravity_data().await {
+        Ok(result) => {
+            println!("✅ 清除完成: {}", result);
+        }
+        Err(e) => {
+            println!("ℹ️ 清除数据时出现: {}（可能数据库本来就是空的）", e);
+        }
+    }
+
+    // 等待300ms确保操作完成
+    tokio::time::sleep(tokio::time::Duration::from_millis(300)).await;
+
+    // 4. 重新启动进程
+    println!("🚀 步骤4: 重新启动 Antigravity");
+    let start_result = crate::antigravity::starter::start_antigravity();
+    let start_message = match start_result {
+        Ok(result) => {
+            println!("✅ 启动结果: {}", result);
+            result
+        }
+        Err(e) => {
+            println!("⚠️ 启动失败: {}", e);
+            format!("启动失败: {}", e)
+        }
+    };
+
+    let final_message = format!(
+        "{} -> 已清除所有备份 -> 已清除账户数据 -> {}",
+        kill_result, start_message
+    );
+    println!("🎉 所有操作完成: {}", final_message);
+
+    Ok(final_message)
+}
+
 // 命令函数将在后续步骤中移动到这里

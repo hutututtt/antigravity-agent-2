@@ -13,7 +13,7 @@ export interface UseUpdateCheckerResult {
     dismissUpdate: () => void;
 }
 
-export function useUpdateChecker(autoCheck: boolean = true): UseUpdateCheckerResult {
+export function useUpdateChecker(autoCheck: boolean = false): UseUpdateCheckerResult {
     const [updateState, setUpdateState] = useState<UpdateState>('no-update');
     const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
     const [downloadProgress, setDownloadProgress] = useState<DownloadProgress | null>(null);
@@ -26,34 +26,34 @@ export function useUpdateChecker(autoCheck: boolean = true): UseUpdateCheckerRes
         try {
             setError(null);
             logger.info('正在检查更新', {
-            module: 'UpdateChecker',
-            action: 'check_start'
-          });
+                module: 'UpdateChecker',
+                action: 'check_start'
+            });
 
             const info = await updateService.checkForUpdates();
 
             if (info) {
                 logger.info('发现新版本', {
-                module: 'UpdateChecker',
-                action: 'update_found',
-                version: info.version
-              });
+                    module: 'UpdateChecker',
+                    action: 'update_found',
+                    version: info.version
+                });
                 setUpdateInfo(info);
                 setUpdateState('update-available');
             } else {
                 logger.info('已是最新版本', {
-                module: 'UpdateChecker',
-                action: 'up_to_date'
-              });
+                    module: 'UpdateChecker',
+                    action: 'up_to_date'
+                });
                 setUpdateState('no-update');
             }
         } catch (err) {
             const errorMsg = err instanceof Error ? err.message : String(err);
             logger.error('检查更新失败', {
-            module: 'UpdateChecker',
-            action: 'check_failed',
-            error: errorMsg
-          });
+                module: 'UpdateChecker',
+                action: 'check_failed',
+                error: errorMsg
+            });
             setError(errorMsg);
             // 不设置错误状态，保持无更新状态，避免显示错误徽章
             setUpdateState('no-update');
@@ -77,10 +77,10 @@ export function useUpdateChecker(autoCheck: boolean = true): UseUpdateCheckerRes
         } catch (err) {
             const errorMsg = err instanceof Error ? err.message : String(err);
             logger.error('下载更新失败', {
-            module: 'UpdateChecker',
-            action: 'download_failed',
-            error: errorMsg
-          });
+                module: 'UpdateChecker',
+                action: 'download_failed',
+                error: errorMsg
+            });
             setError(errorMsg);
             // 下载失败，恢复到更新可用状态，让用户可以重试
             setUpdateState('update-available');
@@ -98,10 +98,10 @@ export function useUpdateChecker(autoCheck: boolean = true): UseUpdateCheckerRes
         } catch (err) {
             const errorMsg = err instanceof Error ? err.message : String(err);
             logger.error('安装更新失败', {
-            module: 'UpdateChecker',
-            action: 'install_failed',
-            error: errorMsg
-          });
+                module: 'UpdateChecker',
+                action: 'install_failed',
+                error: errorMsg
+            });
             setError(errorMsg);
             // 安装失败，恢复到准备安装状态，让用户可以重试
             setUpdateState('ready-to-install');

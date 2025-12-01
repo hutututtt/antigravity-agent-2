@@ -152,6 +152,7 @@ pub enum ProcessPattern {
     ExactName(&'static str),    // 精确匹配进程名
     Contains(&'static str),      // 包含指定文本
     CmdContains(&'static str),   // 命令行包含指定文本
+    #[allow(dead_code)]
     CmdEndsWith(&'static str),   // 命令行以指定文本结尾
 }
 

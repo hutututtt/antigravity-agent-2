@@ -1,5 +1,5 @@
-import {invoke} from '@tauri-apps/api/core';
-import {logger} from '../utils/logger';
+import { invoke } from '@tauri-apps/api/core';
+import { logger } from '../utils/logger';
 import toast from 'react-hot-toast';
 
 /**
@@ -43,6 +43,41 @@ export class AntigravityService {
         error: error
       });
       throw new Error(`备份并重启失败: ${errorMessage}`);
+    }
+  }
+
+  /**
+   * 清除所有数据并重启Antigravity (不备份)
+   */
+  static async clearAndRestartAntigravity(): Promise<void> {
+    try {
+      logger.info('开始执行清除并重启 Antigravity 流程', {
+        module: 'AntigravityService',
+        action: 'clear_and_restart_start'
+      });
+      toast('正在清除数据并重启...');
+
+      logger.info('调用后端 clear_and_restart_antigravity 命令', {
+        module: 'AntigravityService',
+        action: 'call_backend_command'
+      });
+      const result = await invoke('clear_and_restart_antigravity') as string;
+      logger.info('后端命令执行成功', {
+        module: 'AntigravityService',
+        action: 'backend_command_success',
+        result: result
+      });
+
+      toast.success(result);
+
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.error('清除并重启失败', {
+        module: 'AntigravityService',
+        action: 'clear_and_restart_failed',
+        error: errorMessage
+      });
+      throw new Error(`清除并重启失败: ${errorMessage}`);
     }
   }
 }

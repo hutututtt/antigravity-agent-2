@@ -310,33 +310,8 @@ pub async fn delete_backup(name: String, state: State<'_, AppState>) -> Result<S
 
 /// 清空所有备份
 #[tauri::command]
-pub async fn clear_all_backups(state: State<'_, AppState>) -> Result<String, String> {
-    let antigravity_dir = state.config_dir.join("antigravity-accounts");
-
-    if antigravity_dir.exists() {
-        // 读取目录中的所有文件
-        let mut deleted_count = 0;
-        for entry in
-            fs::read_dir(&antigravity_dir).map_err(|e| format!("读取用户目录失败: {}", e))?
-        {
-            let entry = entry.map_err(|e| format!("读取目录项失败: {}", e))?;
-            let path = entry.path();
-
-            // 只删除 JSON 文件
-            if path.extension().is_some_and(|ext| ext == "json") {
-                fs::remove_file(&path)
-                    .map_err(|e| format!("删除文件 {} 失败: {}", path.display(), e))?;
-                deleted_count += 1;
-            }
-        }
-
-        Ok(format!(
-            "已清空所有用户备份，共删除 {} 个文件",
-            deleted_count
-        ))
-    } else {
-        Ok("用户目录不存在，无需清空".to_string())
-    }
+pub async fn clear_all_backups(_state: State<'_, AppState>) -> Result<String, String> {
+    crate::antigravity::backup::clear_all_backups()
 }
 
 // 备份相关函数将在后续步骤中移动到这里
