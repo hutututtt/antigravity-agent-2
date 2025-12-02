@@ -1,3 +1,5 @@
+import { fetch as tauriFetch } from '@tauri-apps/plugin-http';
+
 // API Configuration
 export const API_CONFIG = {
     // Default API base URL (can be overridden by environment variable)
@@ -31,5 +33,18 @@ export function initApiConfig(): void {
     const savedUrl = localStorage.getItem('api_base_url');
     if (savedUrl) {
         API_CONFIG.BASE_URL = savedUrl;
+    }
+}
+
+// Wrapper for fetch to handle CORS in Tauri
+export async function safeFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+    try {
+        // Try using Tauri's native HTTP client first (bypasses CORS)
+        // Tauri fetch returns standard Response object
+        return await tauriFetch(input, init);
+    } catch (e) {
+        console.warn('Tauri fetch failed, falling back to browser fetch', e);
+        // Fallback to browser fetch for development
+        return await fetch(input, init);
     }
 }

@@ -5,7 +5,7 @@ import { BaseButton } from '@/components/base-ui/BaseButton';
 import { logger } from '@/utils/logger';
 import toast from 'react-hot-toast';
 import { generateTOTP } from '@/utils/totp';
-import { getApiUrl, API_CONFIG } from '@/config/api';
+import { getApiUrl, API_CONFIG, safeFetch } from '@/config/api';
 import { cn } from '@/utils/utils';
 
 interface CardKeyLoginDialogProps {
@@ -132,11 +132,18 @@ const CardKeyLoginDialog: React.FC<CardKeyLoginDialogProps> = ({
 
         setIsVerifying(true);
         try {
-            const response = await fetch(getApiUrl(API_CONFIG.ENDPOINTS.CARD_VERIFY), {
+            const apiUrl = getApiUrl(API_CONFIG.ENDPOINTS.CARD_VERIFY);
+            logger.info('Verifying card', { apiUrl });
+
+            const response = await safeFetch(apiUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ cardCode: cardInput.trim() }),
             });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
 
             const data = await response.json();
 
@@ -160,7 +167,16 @@ const CardKeyLoginDialog: React.FC<CardKeyLoginDialogProps> = ({
 
         } catch (error) {
             logger.error('卡密验证失败', { error });
-            toast.error(error instanceof Error ? error.message : '验证失败');
+
+            // Provide more helpful error messages
+            let errorMessage = '验证失败';
+            if (error instanceof TypeError && error.message.includes('fetch')) {
+                errorMessage = `无法连接到服务器 (${API_CONFIG.BASE_URL})\n请检查:\n1. 服务器是否运行\n2. 网络连接是否正常\n3. 防火墙设置`;
+            } else if (error instanceof Error) {
+                errorMessage = error.message;
+            }
+
+            toast.error(errorMessage, { duration: 5000 });
         } finally {
             setIsVerifying(false);
         }
@@ -168,7 +184,7 @@ const CardKeyLoginDialog: React.FC<CardKeyLoginDialogProps> = ({
 
     const handleMarkAsUsed = async (accountId: number) => {
         try {
-            const response = await fetch(getApiUrl(API_CONFIG.ENDPOINTS.ACCOUNT_UPDATE_STATUS), {
+            const response = await safeFetch(getApiUrl(API_CONFIG.ENDPOINTS.ACCOUNT_UPDATE_STATUS), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -210,7 +226,7 @@ const CardKeyLoginDialog: React.FC<CardKeyLoginDialogProps> = ({
                 toast.loading('调试模式已启用，浏览器将保持打开...', { id: 'auto-login' });
             }
 
-            const response = await fetch(getApiUrl(API_CONFIG.ENDPOINTS.AUTO_LOGIN), {
+            const response = await safeFetch(getApiUrl(API_CONFIG.ENDPOINTS.AUTO_LOGIN), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ accountId, debug: debugMode, cardCode: cardInput.trim() }),
@@ -236,7 +252,7 @@ const CardKeyLoginDialog: React.FC<CardKeyLoginDialogProps> = ({
         }
 
         try {
-            const response = await fetch(getApiUrl(API_CONFIG.ENDPOINTS.ACCOUNT_FEEDBACK), {
+            const response = await safeFetch(getApiUrl(API_CONFIG.ENDPOINTS.ACCOUNT_FEEDBACK), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

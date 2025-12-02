@@ -1,0 +1,33 @@
+{
+    "$schema": "../gen/schemas/desktop-schema.json",
+    "identifier": "http-capability",
+    "description": "HTTP requests to backend API",
+    "windows": [
+        "main"
+    ],
+    "permissions": [
+        {
+            "identifier": "http:default",
+            "allow": [
+                {
+                    "url": "http://47.93.28.155:3000/**"
+                },
+                {
+                    "url": "http://127.0.0.1:3000/**"
+                },
+                {
+                    "url": "http://localhost:3000/**"
+                },
+                {
+                    "url": "https://ipapi.co/**"
+                },
+                {
+                    "url": "https://ip-api.com/**"
+                },
+                {
+                    "url": "https://api.ipify.org/**"
+                }
+            ]
+        }
+    ]
+}

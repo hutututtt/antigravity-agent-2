@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAntigravityAccount } from '@/modules/use-antigravity-account.ts';
 import { AntigravityService } from '@/services/antigravity-service';
-import { getApiUrl, API_CONFIG } from '@/config/api';
+import { getApiUrl, API_CONFIG, safeFetch } from '@/config/api';
 
 export type ExpirationStatus = 'valid' | 'expiring' | 'expired' | 'no_card';
 
@@ -77,7 +77,11 @@ export const useCardExpiration = (): UseCardExpirationResult => {
 
     const verifyCardStatus = async (cardCode: string) => {
         try {
-            const response = await fetch(getApiUrl(API_CONFIG.ENDPOINTS.CARD_VERIFY), {
+
+
+            // ...
+
+            const response = await safeFetch(getApiUrl(API_CONFIG.ENDPOINTS.CARD_VERIFY), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ cardCode }),

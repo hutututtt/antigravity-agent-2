@@ -1,4 +1,5 @@
 import { logger } from "@/utils/logger";
+import { safeFetch } from "@/config/api";
 
 export interface IPInfo {
     ip: string;
@@ -78,15 +79,23 @@ export class NetworkService {
 
     // Get IP information from multiple sources
     static async getIPInfo(): Promise<IPInfo | null> {
-        try {
-            // Try primary API with timeout
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 5000);
+        let ipInfo: IPInfo | null = null;
 
-            const response = await fetch('https://ipapi.co/json/', {
-                signal: controller.signal
+        ipInfo = await this.checkIpApiCo();
+        if (ipInfo) return ipInfo;
+
+        ipInfo = await this.checkIpApiCom();
+        if (ipInfo) return ipInfo;
+
+        ipInfo = await this.checkIpify();
+        return ipInfo;
+    }
+
+    private static async checkIpApiCo(): Promise<IPInfo | null> {
+        try {
+            const response = await safeFetch('https://ipapi.co/json/', {
+                signal: AbortSignal.timeout(5000)
             });
-            clearTimeout(timeoutId);
 
             if (response.ok) {
                 return await response.json();
@@ -94,16 +103,14 @@ export class NetworkService {
         } catch (error) {
             logger.warn('Primary IP API failed', { error: String(error) });
         }
+        return null;
+    }
 
+    private static async checkIpApiCom(): Promise<IPInfo | null> {
         try {
-            // Fallback API - use HTTPS
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 5000);
-
-            const response = await fetch('https://ip-api.com/json/', {
-                signal: controller.signal
+            const response = await safeFetch('https://ip-api.com/json/', {
+                signal: AbortSignal.timeout(5000)
             });
-            clearTimeout(timeoutId);
 
             if (response.ok) {
                 const data = await response.json();
@@ -120,16 +127,14 @@ export class NetworkService {
         } catch (error) {
             logger.warn('Fallback IP API failed', { error: String(error) });
         }
+        return null;
+    }
 
-        // If both APIs fail, try to get basic info from a third source
+    private static async checkIpify(): Promise<IPInfo | null> {
         try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 5000);
-
-            const response = await fetch('https://api.ipify.org?format=json', {
-                signal: controller.signal
+            const response = await safeFetch('https://api.ipify.org?format=json', {
+                signal: AbortSignal.timeout(5000)
             });
-            clearTimeout(timeoutId);
 
             if (response.ok) {
                 const data = await response.json();
@@ -146,7 +151,6 @@ export class NetworkService {
         } catch (error) {
             logger.error('All IP APIs failed', { error: String(error) });
         }
-
         return null;
     }
 
