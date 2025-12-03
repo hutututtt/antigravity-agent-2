@@ -16,9 +16,6 @@ use crate::language_server::windows::scan_process_for_token;
 #[cfg(target_os = "linux")]
 use crate::language_server::linux::scan_process_for_token;
 
-#[cfg(target_os = "macos")]
-use crate::language_server::macos::scan_process_for_token;
-
 pub(crate) const SCAN_AHEAD: usize = 200;
 pub(crate) const CHUNK_SIZE: usize = 512 * 1024; // 512KB 分块读取，降低单次读耗时
 pub(crate) const MAX_REGION_BYTES: usize = 64 * 1024 * 1024; // 每个区域最多扫描 64MB，加速
@@ -207,30 +204,23 @@ pub async fn get_csrf_token_with_cache() -> Result<String> {
     Ok(token)
 }
 
-/// 直接获取 CSRF token（不使用缓存的底层函数）
+/// 直接获取 CSRF token（使用命令行参数检测，不使用缓存的底层函数）
 fn find_csrf_token_from_memory_direct() -> Result<String> {
-    // 将原始函数的逻辑复制到这里，避免在闭包中调用
-    let uuid_re = Regex::new(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
-        .expect("valid uuid regex");
-    let patterns = get_patterns();
-
-    let pids = collect_target_pids();
-    if pids.is_empty() {
-        return Err(anyhow!("未找到运行中的 Antigravity/Windsurf 进程"));
-    }
-
-    for pid in pids {
-        match scan_process_for_token(pid, &uuid_re, &patterns) {
-            Ok(Some(token)) => return Ok(token),
-            Ok(None) => continue,
-            Err(e) => {
-                tracing::warn!(pid, error = %e, "扫描进程失败");
-                continue;
-            }
-        }
-    }
-
-    Err(anyhow!("未在运行中的 Antigravity/Windsurf 进程内存中找到 CSRF token"))
+    use super::cmdline_detector::CmdLineDetector;
+    
+    tracing::info!("使用命令行参数检测 CSRF Token...");
+    
+    let detector = CmdLineDetector::new();
+    let process_info = detector.detect_process_info()
+        .map_err(|e| anyhow!("从进程命令行提取 CSRF Token 失败: {}", e))?;
+    
+    tracing::info!(
+        "成功从进程命令行提取 CSRF Token (PID: {}, extension_port: {:?})",
+        process_info.pid,
+        process_info.extension_port
+    );
+    
+    Ok(process_info.csrf_token)
 }
 
 /// 获取端口信息（带缓存）

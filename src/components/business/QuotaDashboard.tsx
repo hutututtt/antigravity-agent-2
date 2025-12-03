@@ -53,24 +53,24 @@ export const QuotaDashboard: React.FC<QuotaDashboardProps> = ({ models, classNam
                 <span>当前会话配额</span>
                 <span className="h-px flex-1 bg-gray-100 dark:bg-gray-700"></span>
             </h3>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
                 {models.map((model, idx) => {
-                    const usageValue = 1- model.quotaInfo.remainingFraction;
+                    const usageValue = 1 - model.quotaInfo.remainingFraction;
                     const config = getProgressConfig(usageValue);
 
                     return (
-                        <div key={`${model.label}-${idx}`} className="flex flex-col gap-2 p-3 rounded-xl bg-gray-50 dark:bg-gray-900/50 border border-gray-100 dark:border-gray-800">
-                            <div className="flex justify-between items-end px-1">
-                                <span className="text-xs font-semibold text-gray-700 dark:text-gray-200 truncate max-w-[180px]" title={model.label}>
+                        <div key={`${model.label}-${idx}`} className="flex flex-col gap-3 p-4 rounded-xl bg-gray-50 dark:bg-gray-900/50 border border-gray-100 dark:border-gray-800">
+                            <div className="flex justify-between items-center px-1">
+                                <span className="text-sm font-semibold text-gray-700 dark:text-gray-200 truncate" title={model.label}>
                                     {model.label}
                                 </span>
-                                <span className={cn("text-xs font-bold font-mono", config.textColor)}>
+                                <span className={cn("text-sm font-bold font-mono", config.textColor)}>
                                     {(usageValue * 100).toFixed(0)}%
                                 </span>
                             </div>
                             <GlassProgressBar
                                 value={usageValue}
-                                height="h-4"
+                                height="h-3"
                                 className="w-full bg-gray-200 dark:bg-gray-700 border-0"
                                 gradientFrom={config.from}
                                 gradientTo={config.to}

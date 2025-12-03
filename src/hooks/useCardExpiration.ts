@@ -28,9 +28,16 @@ export const useCardExpiration = (): UseCardExpirationResult => {
     const checkExpiration = () => {
         try {
             const savedCardInfo = localStorage.getItem('antigravity_card_info');
+            console.log('[useCardExpiration] checkExpiration called', {
+                hasCardInfo: !!savedCardInfo,
+                currentStatus: status,
+                timestamp: new Date().toISOString()
+            });
+
             if (!savedCardInfo) {
                 setCardInfo(null);
                 setStatus('no_card');
+                console.log('[useCardExpiration] No card info found, status set to no_card');
                 return;
             }
 
@@ -48,7 +55,13 @@ export const useCardExpiration = (): UseCardExpirationResult => {
 
             if (diffTime <= 0) {
                 setStatus('expired');
-                // Clear all data and restart if expired (Factory Reset)
+
+                // Clear local storage to prevent infinite restart loop
+                localStorage.removeItem('antigravity_card_info');
+                localStorage.removeItem('antigravity_card_input');
+                localStorage.removeItem('antigravity_accounts');
+                setCardInfo(null);
+
                 // Clear all data and restart if expired (Factory Reset)
                 AntigravityService.clearAndRestartAntigravity().then(async () => {
                     // Sync frontend state
@@ -60,8 +73,10 @@ export const useCardExpiration = (): UseCardExpirationResult => {
                 });
             } else if (diffDays <= 3) {
                 setStatus('expiring');
+                console.log('[useCardExpiration] Card expiring soon', { diffDays });
             } else {
                 setStatus('valid');
+                console.log('[useCardExpiration] Card is valid', { diffDays });
 
                 // Perform server-side verification if we have a card code
                 const cardCode = localStorage.getItem('antigravity_card_input');
@@ -92,6 +107,12 @@ export const useCardExpiration = (): UseCardExpirationResult => {
             if (data.code !== 200) {
                 console.warn('Card validation failed:', data.message);
                 setStatus('expired');
+
+                // Clear local storage to prevent infinite restart loop
+                localStorage.removeItem('antigravity_card_info');
+                localStorage.removeItem('antigravity_card_input');
+                localStorage.removeItem('antigravity_accounts');
+                setCardInfo(null);
 
                 AntigravityService.clearAndRestartAntigravity().then(async () => {
                     await useAntigravityAccount.getState().clearAllUsers();

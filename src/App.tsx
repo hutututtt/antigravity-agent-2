@@ -121,9 +121,28 @@ function App() {
       <CardKeyLoginDialog
         isOpen={isCardKeyLoginOpen}
         onOpenChange={(open) => {
+          console.log('[App] CardKeyLoginDialog onOpenChange called', {
+            open,
+            cardStatus,
+            hasCardDataInStorage: !!localStorage.getItem('antigravity_card_info'),
+            timestamp: new Date().toISOString()
+          });
+
           // Prevent closing if no card is present
-          if (!open && cardStatus === 'no_card') {
-            return;
+          // Check localStorage directly to avoid race condition with useCardExpiration
+          if (!open) {
+            const hasCardData = localStorage.getItem('antigravity_card_info');
+            if (!hasCardData && cardStatus === 'no_card') {
+              console.log('[App] Preventing dialog close - no card data found', {
+                hasCardData: !!hasCardData,
+                cardStatus
+              });
+              return;
+            }
+            console.log('[App] Allowing dialog close', {
+              hasCardData: !!hasCardData,
+              cardStatus
+            });
           }
           setIsCardKeyLoginOpen(open);
         }}

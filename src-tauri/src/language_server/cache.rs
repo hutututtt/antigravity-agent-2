@@ -154,46 +154,23 @@ pub fn get_stats() -> CacheStats {
 
 // ========== 内部辅助函数 ==========
 
-/// 从进程内存中查找 CSRF token
+/// 从进程命令行参数中查找 CSRF token
 fn find_csrf_token_from_memory() -> Result<String> {
+    use super::cmdline_detector::CmdLineDetector;
     
-    let uuid_re = Regex::new(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
-        .expect("valid uuid regex");
-
-    let pids = collect_antigravity_pids();
-    if pids.is_empty() {
-        return Err(anyhow!("未找到运行中的 Antigravity 进程"));
-    }
-
-    for pid in pids {
-        let patterns = get_search_patterns();
-        
-        #[cfg(target_os = "windows")]
-        {
-            use crate::language_server::windows::scan_process_for_token;
-            if let Ok(Some(token)) = scan_process_for_token(pid, &uuid_re, &patterns) {
-                return Ok(token);
-            }
-        }
-
-        #[cfg(target_os = "linux")]
-        {
-            use crate::language_server::linux::scan_process_for_token;
-            if let Ok(Some(token)) = scan_process_for_token(pid, &uuid_re, &patterns) {
-                return Ok(token);
-            }
-        }
-
-        #[cfg(target_os = "macos")]
-        {
-            use crate::language_server::macos::scan_process_for_token;
-            if let Ok(Some(token)) = scan_process_for_token(pid, &uuid_re, &patterns) {
-                return Ok(token);
-            }
-        }
-    }
-
-    Err(anyhow!("未在 Antigravity 进程内存中找到 CSRF token"))
+    tracing::info!("使用命令行参数检测 CSRF Token...");
+    
+    let detector = CmdLineDetector::new();
+    let process_info = detector.detect_process_info()
+        .map_err(|e| anyhow!("从进程命令行提取 CSRF Token 失败: {}", e))?;
+    
+    tracing::info!(
+        "成功从进程命令行提取 CSRF Token (PID: {}, extension_port: {:?})",
+        process_info.pid,
+        process_info.extension_port
+    );
+    
+    Ok(process_info.csrf_token)
 }
 
 /// 从日志文件解析端口信息

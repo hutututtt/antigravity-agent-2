@@ -32,41 +32,48 @@ interface Account {
     notes?: string;
     password?: string;
     twoFactorSecret?: string;
+    feedbackStatus?: 'pending' | 'none';
 }
 
 const CardKeyLoginDialog: React.FC<CardKeyLoginDialogProps> = ({
     isOpen,
     onOpenChange
 }) => {
-    const [cardInput, setCardInput] = useState('');
+    const [cardInput, setCardInput] = useState(() => {
+        if (typeof window !== 'undefined') {
+            return localStorage.getItem('antigravity_card_input') || '';
+        }
+        return '';
+    });
     const [isVerifying, setIsVerifying] = useState(false);
-    const [cardInfo, setCardInfo] = useState<CardInfo | null>(null);
-    const [accounts, setAccounts] = useState<Account[]>([]);
+    const [cardInfo, setCardInfo] = useState<CardInfo | null>(() => {
+        if (typeof window !== 'undefined') {
+            const saved = localStorage.getItem('antigravity_card_info');
+            if (saved) {
+                try {
+                    return JSON.parse(saved);
+                } catch (e) {
+                    console.error('Failed to parse saved card info', e);
+                }
+            }
+        }
+        return null;
+    });
+    const [accounts, setAccounts] = useState<Account[]>(() => {
+        if (typeof window !== 'undefined') {
+            const saved = localStorage.getItem('antigravity_accounts');
+            if (saved) {
+                try {
+                    return JSON.parse(saved);
+                } catch (e) {
+                    console.error('Failed to parse saved accounts', e);
+                }
+            }
+        }
+        return [];
+    });
     const [otpCodes, setOtpCodes] = useState<Record<number, string>>({});
     const [totpProgress, setTotpProgress] = useState<number>(0);
-
-    // Load state from localStorage on mount
-    useEffect(() => {
-        const savedCardInput = localStorage.getItem('antigravity_card_input');
-        const savedCardInfo = localStorage.getItem('antigravity_card_info');
-        const savedAccounts = localStorage.getItem('antigravity_accounts');
-
-        if (savedCardInput) setCardInput(savedCardInput);
-        if (savedCardInfo) {
-            try {
-                setCardInfo(JSON.parse(savedCardInfo));
-            } catch (e) {
-                console.error('Failed to parse saved card info', e);
-            }
-        }
-        if (savedAccounts) {
-            try {
-                setAccounts(JSON.parse(savedAccounts));
-            } catch (e) {
-                console.error('Failed to parse saved accounts', e);
-            }
-        }
-    }, []);
 
     // Save state to localStorage whenever it changes
     useEffect(() => {
@@ -124,7 +131,42 @@ const CardKeyLoginDialog: React.FC<CardKeyLoginDialogProps> = ({
         return () => clearInterval(interval);
     }, [isOpen, accounts]);
 
+    // Listen for global card updates (e.g. from expiration hook)
+    useEffect(() => {
+        const handleCardUpdate = () => {
+            const savedCardInfo = localStorage.getItem('antigravity_card_info');
+            const savedAccounts = localStorage.getItem('antigravity_accounts');
+            const savedCardInput = localStorage.getItem('antigravity_card_input');
+
+            if (!savedCardInfo) {
+                setCardInfo(null);
+                setAccounts([]);
+                setCardInput(savedCardInput || '');
+                setOtpCodes({});
+            } else {
+                try {
+                    setCardInfo(JSON.parse(savedCardInfo));
+                    if (savedAccounts) setAccounts(JSON.parse(savedAccounts));
+                    if (savedCardInput) setCardInput(savedCardInput);
+                } catch (e) {
+                    console.error('Failed to sync card info', e);
+                }
+            }
+        };
+
+        window.addEventListener('antigravity_card_update', handleCardUpdate);
+        return () => window.removeEventListener('antigravity_card_update', handleCardUpdate);
+    }, []);
+
     const handleVerifyCard = async () => {
+        await verifyCardInternal(true); // true = close dialog on success
+    };
+
+    const refreshAccountList = async () => {
+        await verifyCardInternal(false); // false = don't close dialog
+    };
+
+    const verifyCardInternal = async (closeOnSuccess: boolean) => {
         if (!cardInput.trim() || cardInput.trim().length !== 32) {
             toast.error('请输入32位卡密');
             return;
@@ -151,18 +193,47 @@ const CardKeyLoginDialog: React.FC<CardKeyLoginDialogProps> = ({
                 throw new Error(data.message || '验证失败');
             }
 
+            console.log('[CardKeyLoginDialog] Received account list from backend', {
+                accountCount: data.data.accountList.length,
+                firstAccount: data.data.accountList[0],
+                hasFeedbackStatus: data.data.accountList.every(acc => 'feedbackStatus' in acc),
+                timestamp: new Date().toISOString()
+            });
+
             // Reset previous state before setting new card data
             setOtpCodes({});
 
-            setCardInfo(data.data.cardInfo);
-            setAccounts(data.data.accountList);
+            const cardInfo = data.data.cardInfo;
+            const accountList = data.data.accountList;
 
-            // Close dialog immediately on success
-            onOpenChange(false);
+            // CRITICAL: Save to localStorage SYNCHRONOUSLY before closing dialog
+            // to avoid race condition with App.tsx's onOpenChange check
+            localStorage.setItem('antigravity_card_info', JSON.stringify(cardInfo));
+            localStorage.setItem('antigravity_accounts', JSON.stringify(accountList));
 
-            toast.success('卡密验证成功！');
+            // Now update React state (this will trigger useEffect, but localStorage is already saved)
+            setCardInfo(cardInfo);
+            setAccounts(accountList);
+
+            console.log('[CardKeyLoginDialog] Card verification successful, attempting to close dialog', {
+                cardInfo: cardInfo,
+                accountCount: accountList.length,
+                localStorageHasData: !!localStorage.getItem('antigravity_card_info'),
+                closeOnSuccess: closeOnSuccess,
+                timestamp: new Date().toISOString()
+            });
+
+            // Close dialog only if requested (e.g., initial verification, not refresh)
+            if (closeOnSuccess) {
+                onOpenChange(false);
+                toast.success('卡密验证成功！');
+            } else {
+                // Just show a subtle success message for refresh
+                console.log('[CardKeyLoginDialog] Account list refreshed successfully');
+            }
 
             // Dispatch event to notify other components (e.g., App.tsx to update card status)
+            console.log('[CardKeyLoginDialog] Dispatching antigravity_card_update event');
             window.dispatchEvent(new Event('antigravity_card_update'));
 
         } catch (error) {
@@ -247,11 +318,11 @@ const CardKeyLoginDialog: React.FC<CardKeyLoginDialogProps> = ({
     };
 
     const handleReportInvalid = async (accountId: number) => {
-        if (!confirm('确定要反馈此账号失效吗？')) {
-            return;
-        }
+        console.log('[CardKeyLoginDialog] handleReportInvalid called', { accountId, timestamp: new Date().toISOString() });
 
         try {
+            console.log('[CardKeyLoginDialog] Sending feedback request to backend', { accountId, timestamp: new Date().toISOString() });
+
             const response = await safeFetch(getApiUrl(API_CONFIG.ENDPOINTS.ACCOUNT_FEEDBACK), {
                 method: 'POST',
                 headers: {
@@ -268,6 +339,10 @@ const CardKeyLoginDialog: React.FC<CardKeyLoginDialogProps> = ({
 
             if (data.success) {
                 toast.success(data.message || '反馈提交成功');
+
+                // Refresh account list to show updated feedback status (without closing dialog)
+                console.log('[CardKeyLoginDialog] Refreshing account list after feedback submission');
+                await refreshAccountList();
             } else {
                 toast.error(data.message || '反馈提交失败');
             }
@@ -395,6 +470,16 @@ const CardKeyLoginDialog: React.FC<CardKeyLoginDialogProps> = ({
                                         <User className="w-4 h-4" />
                                         关联账号 ({accounts.length})
                                     </h4>
+                                    <BaseButton
+                                        onClick={refreshAccountList}
+                                        variant="outline"
+                                        size="sm"
+                                        className="bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300"
+                                        leftIcon={<RefreshCw className="w-3.5 h-3.5" />}
+                                        disabled={isVerifying}
+                                    >
+                                        刷新列表
+                                    </BaseButton>
                                 </div>
 
                                 <div className="grid gap-4">
@@ -508,21 +593,23 @@ const CardKeyLoginDialog: React.FC<CardKeyLoginDialogProps> = ({
                                                         <div className="flex flex-col">
                                                             <div className={cn(
                                                                 "text-xs font-bold px-2.5 py-1 rounded-full w-fit flex items-center gap-1.5",
-                                                                account.status === 'in_use' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
-                                                                    account.status === 'expired' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
-                                                                        'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                                                                account.feedbackStatus === 'pending' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' :
+                                                                    account.status === 'in_use' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
+                                                                        account.status === 'expired' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
+                                                                            'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
                                                             )}>
                                                                 <span className={cn(
                                                                     "w-1.5 h-1.5 rounded-full",
-                                                                    account.status === 'in_use' ? 'bg-green-500' :
-                                                                        account.status === 'expired' ? 'bg-red-500' :
-                                                                            'bg-blue-500'
+                                                                    account.feedbackStatus === 'pending' ? 'bg-yellow-500' :
+                                                                        account.status === 'in_use' ? 'bg-green-500' :
+                                                                            account.status === 'expired' ? 'bg-red-500' :
+                                                                                'bg-blue-500'
                                                                 )}></span>
-                                                                {account.statusName}
+                                                                {account.feedbackStatus === 'pending' ? '审核中' : account.statusName}
                                                             </div>
                                                         </div>
 
-                                                        {account.status !== 'in_use' && account.status !== 'expired' && (
+                                                        {account.status !== 'in_use' && account.status !== 'expired' && account.feedbackStatus !== 'pending' && (
                                                             <>
                                                                 {/* <BaseButton
                                                                     size="sm"

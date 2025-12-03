@@ -76,9 +76,32 @@ export function AppUserPanel() {
   }, [antigravityAccount.currentAuthInfo, antigravityAccount.users, cardStatus]);
 
   // 获取当前用户的配额数据
-  const currentQuotaData = currentAntigravityAccount && languageServerUserInfo.users[currentAntigravityAccount?.id]?.userStatus
-    ? languageServerUserInfo.users[currentAntigravityAccount.id].userStatus.cascadeModelConfigData.clientModelConfigs
-    : [];
+  const currentQuotaData = React.useMemo(() => {
+    if (!currentAntigravityAccount) {
+      return [];
+    }
+    const userInfo = languageServerUserInfo.users[currentAntigravityAccount.id];
+    if (!userInfo?.userStatus?.cascadeModelConfigData?.clientModelConfigs) {
+      return [];
+    }
+    const configs = userInfo.userStatus.cascadeModelConfigData.clientModelConfigs;
+    // 按标签字母顺序排序，确保显示顺序一致
+    return [...configs].sort((a, b) => a.label.localeCompare(b.label));
+  }, [currentAntigravityAccount?.id, languageServerUserInfo.users[currentAntigravityAccount?.id || '']]);
+
+  console.log('[AppUserPanel] Quota data check:', {
+    hasCurrentAccount: !!currentAntigravityAccount,
+    currentAccountId: currentAntigravityAccount?.id,
+    currentAccountEmail: currentAntigravityAccount?.email,
+    userInfoForCurrentAccount: languageServerUserInfo.users[currentAntigravityAccount?.id || ''],
+    hasUserInfo: !!languageServerUserInfo.users[currentAntigravityAccount?.id || ''],
+    hasUserStatus: !!languageServerUserInfo.users[currentAntigravityAccount?.id || '']?.userStatus,
+    hasCascadeModelConfigData: !!languageServerUserInfo.users[currentAntigravityAccount?.id || '']?.userStatus?.cascadeModelConfigData,
+    quotaDataLength: currentQuotaData.length,
+    quotaData: currentQuotaData,
+    allUserIds: Object.keys(languageServerUserInfo.users)
+  });
+
 
   const [isClearDialogOpen, setIsClearDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -210,19 +233,44 @@ export function AppUserPanel() {
       </div>
 
       {/* 配额仪表板 */}
-      {currentQuotaData.length > 0 && (
-        <div className="animate-fade-in">
-          <div className="text-sm font-bold text-gray-600 mb-3 flex items-center gap-2">
-            资源配额
+      {currentAntigravityAccount ? (
+        currentQuotaData.length > 0 ? (
+          <div className="animate-fade-in">
+            <div className="text-sm font-bold text-gray-600 mb-3 flex items-center gap-2">
+              资源配额
+            </div>
+            <QuotaDashboard models={currentQuotaData} />
           </div>
-          <QuotaDashboard models={currentQuotaData} />
-        </div>
-      )}
+        ) : (
+          <div className="glass-panel p-6 text-center">
+            <div className="text-sm text-gray-500">
+              <div className="animate-pulse">正在加载配额信息...</div>
+              <div className="text-xs text-gray-400 mt-2">
+                请确保 Antigravity Language Server 正在运行
+              </div>
+            </div>
+          </div>
+        )
+      ) : null}
 
       {/* 用户网格 */}
       <div>
-        <div className="text-sm font-bold text-gray-600 mb-4 flex items-center gap-2">
-          账户列表
+        <div className="text-sm font-bold text-gray-600 mb-4 flex items-center justify-between">
+          <span className="flex items-center gap-2">账户列表</span>
+          <button
+            onClick={async () => {
+              try {
+                await antigravityAccount.getUsers();
+                toast.success('账户列表已刷新');
+              } catch (error) {
+                toast.error(`刷新失败: ${error}`);
+              }
+            }}
+            className="text-xs text-gray-600 hover:text-gray-800 transition-colors flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50"
+          >
+            <Activity className="w-3.5 h-3.5" />
+            刷新列表
+          </button>
         </div>
 
         <div className={`min-h-[200px] ${antigravityAccount.users.length === 0 ? "glass-panel flex items-center justify-center p-12" : ""}`}>
@@ -237,25 +285,27 @@ export function AppUserPanel() {
               </p>
             </div>
           ) : (
-            <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3">
-              {antigravityAccount.users.map((user, index) => {
-                // 获取该用户的配额信息
-                const userStatus = languageServerUserInfo.users[user.id]?.userStatus;
-                const quotaInfo = userStatus?.cascadeModelConfigData?.clientModelConfigs?.[0]?.quotaInfo;
+            <div className="max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
+              <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 pb-2">
+                {antigravityAccount.users.map((user, index) => {
+                  // 获取该用户的配额信息
+                  const userStatus = languageServerUserInfo.users[user.id]?.userStatus;
+                  const quotaInfo = userStatus?.cascadeModelConfigData?.clientModelConfigs?.[0]?.quotaInfo;
 
-                return (
-                  <div key={`${user.email}-${index}`} className="animate-fade-in" style={{ animationDelay: `${0.05 * (index + 1)}s` }}>
-                    <UserListItem
-                      user={user}
-                      isCurrent={currentAntigravityAccount?.email === user.email}
-                      onSelect={handleUserClick}
-                      onSwitch={handleSwitchAccount}
-                      onDelete={handleDeleteBackup}
-                      quota={quotaInfo}
-                    />
-                  </div>
-                );
-              })}
+                  return (
+                    <div key={`${user.email}-${index}`} className="animate-fade-in" style={{ animationDelay: `${0.05 * (index + 1)}s` }}>
+                      <UserListItem
+                        user={user}
+                        isCurrent={currentAntigravityAccount?.email === user.email}
+                        onSelect={handleUserClick}
+                        onSwitch={handleSwitchAccount}
+                        onDelete={handleDeleteBackup}
+                        quota={quotaInfo}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>
