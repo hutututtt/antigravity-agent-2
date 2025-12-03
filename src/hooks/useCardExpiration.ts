@@ -21,7 +21,8 @@ interface UseCardExpirationResult {
 }
 
 export const useCardExpiration = (): UseCardExpirationResult => {
-    const [status, setStatus] = useState<ExpirationStatus>('no_card');
+    // 初始状态设为 'valid'，避免在检查完成前就触发 no_card 对话框
+    const [status, setStatus] = useState<ExpirationStatus>('valid');
     const [daysLeft, setDaysLeft] = useState<number>(0);
     const [cardInfo, setCardInfo] = useState<CardInfo | null>(null);
 

@@ -84,7 +84,9 @@ async fn find_working_https_port(extension_port: u16, csrf_token: &str) -> Resul
         }
     }
 
-    Err("未找到可用的 HTTPS API 端口".to_string())
+    // 如果所有端口都测试失败，回退到使用 extension_port
+    tracing::warn!("所有端口测试失败，回退使用 extension_port: {}", extension_port);
+    Ok(extension_port)
 }
 
 /// 前端调用 GetUserStatus 的公开命令
