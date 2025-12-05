@@ -131,6 +131,7 @@ fn main() {
             restore_antigravity_account,
             switch_to_antigravity_account,
             clear_all_antigravity_data,
+            update_account_remark, // 新增：更新账户备注
             // 进程管理命令
             kill_antigravity,
             is_antigravity_running,
@@ -174,6 +175,7 @@ fn main() {
             clear_all_cache_command,
             get_cache_stats_command,
             initialize_language_server_cache,
+            debug_get_cache_info,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

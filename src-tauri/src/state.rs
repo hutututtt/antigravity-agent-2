@@ -13,7 +13,7 @@ pub struct ProfileInfo {
 }
 
 // Antigravity 账户信息结构
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct AntigravityAccount {
     pub id: String,
     pub name: String,
@@ -23,6 +23,8 @@ pub struct AntigravityAccount {
     pub user_settings: String, // 编码后的用户设置
     pub created_at: String,
     pub last_switched: String,
+    #[serde(default)]
+    pub remark: String, // 账户备注
 }
 
 #[derive(Debug, Serialize, Deserialize)]

@@ -44,4 +44,7 @@ export interface AntigravityAccount {
 
   /** 最后切换时间 */
   last_switched: string;
+
+  /** 账户备注 */
+  remark?: string;
 }

@@ -54,4 +54,14 @@ export class AccountCommands {
   static async clearAllData(): Promise<string> {
     return invoke('clear_all_antigravity_data');
   }
+
+  /**
+   * 更新账户备注
+   * @param email 账户邮箱
+   * @param remark 备注内容
+   * @returns 更新结果消息
+   */
+  static async updateAccountRemark(email: string, remark: string): Promise<string> {
+    return invoke('update_account_remark', { email, remark });
+  }
 }

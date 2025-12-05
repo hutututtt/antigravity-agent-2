@@ -252,6 +252,13 @@ fn parse_backup_to_account(
         last_switched.clone()
     };
 
+    // 提取备注（如果存在）
+    let remark = backup_data
+        .get("remark")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+
     Ok(crate::AntigravityAccount {
         id,
         name,
@@ -261,6 +268,7 @@ fn parse_backup_to_account(
         user_settings,
         created_at,
         last_switched,
+        remark,
     })
 }
 
@@ -518,6 +526,72 @@ pub async fn switch_to_antigravity_account(account_name: String) -> Result<Strin
 
         Ok(final_message)
     })
+}
+
+/// 更新账户备注
+#[tauri::command]
+#[instrument(fields(email = %email, remark = %remark))]
+pub async fn update_account_remark(
+    email: String,
+    remark: String,
+    state: State<'_, crate::AppState>,
+) -> Result<String, String> {
+    tracing::info!("📝 开始更新账户备注");
+    
+    let start_time = std::time::Instant::now();
+    
+    let result = async {
+        // 1. 构建备份文件路径
+        let backup_file = state
+            .config_dir
+            .join("antigravity-accounts")
+            .join(format!("{}.json", email));
+        
+        if !backup_file.exists() {
+            return Err(format!("账户文件不存在: {}", email));
+        }
+        
+        // 2. 读取现有数据
+        let content = fs::read_to_string(&backup_file)
+            .map_err(|e| format!("读取文件失败: {}", e))?;
+        
+        let mut backup_data: Value = serde_json::from_str(&content)
+            .map_err(|e| format!("解析 JSON 失败: {}", e))?;
+        
+        // 3. 更新备注字段
+        backup_data["remark"] = Value::String(remark.clone());
+        
+        // 4. 写回文件
+        let updated_content = serde_json::to_string_pretty(&backup_data)
+            .map_err(|e| format!("序列化 JSON 失败: {}", e))?;
+        
+        fs::write(&backup_file, updated_content)
+            .map_err(|e| format!("写入文件失败: {}", e))?;
+        
+        tracing::info!("✅ 账户备注更新成功");
+        Ok(format!("账户 {} 的备注已更新", email))
+    }.await;
+    
+    let duration = start_time.elapsed();
+    
+    match result {
+        Ok(message) => {
+            tracing::info!(
+                duration_ms = duration.as_millis(),
+                result_message = %message,
+                "更新备注操作完成"
+            );
+            Ok(message)
+        }
+        Err(e) => {
+            tracing::error!(
+                error = %e,
+                duration_ms = duration.as_millis(),
+                "更新备注操作失败"
+            );
+            Err(e)
+        }
+    }
 }
 
 // 命令函数将在后续步骤中移动到这里

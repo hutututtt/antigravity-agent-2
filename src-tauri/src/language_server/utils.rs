@@ -174,6 +174,41 @@ pub(crate) fn search_bytes_for_token(data: &[u8], uuid_re: &Regex, patterns: &(V
 }
 
 
+/// 统一检测服务器信息（端口和 CSRF Token）
+/// 确保端口和 Token 来自同一个进程，避免不匹配
+pub fn detect_server_info() -> Result<PortInfo> {
+    use super::cmdline_detector::CmdLineDetector;
+    
+    tracing::info!("开始检测服务器信息（端口 + Token）...");
+    
+    let detector = CmdLineDetector::new();
+    let process_info = detector.detect_process_info()
+        .map_err(|e| anyhow!("从进程命令行提取信息失败: {}", e))?;
+    
+    tracing::info!(
+        "成功从进程命令行提取信息 (PID: {}): extension_port={:?}, api_port={:?}, csrf_token={}...",
+        process_info.pid,
+        process_info.extension_port,
+        process_info.api_port,
+        &process_info.csrf_token[..8.min(process_info.csrf_token.len())]
+    );
+
+    // 构造 PortInfo
+    // 注意：HTTPS 端口通常是 extension_port + 1
+    let https_port = process_info.extension_port.map(|p| p + 1);
+    
+    // 如果命令行中有 api_port，也可以使用
+    // let https_port = process_info.api_port.or(https_port);
+
+    Ok(PortInfo {
+        https_port,
+        http_port: None, // 命令行中通常没有 HTTP 端口，但这不影响 HTTPS 请求
+        extension_port: process_info.extension_port,
+        log_path: None, // 从命令行获取的，没有日志路径
+        csrf_token: Some(process_info.csrf_token), // 新增字段：携带 Token
+    })
+}
+
 /// 带 CSRF token 缓存的获取函数（使用 moka）
 pub async fn get_csrf_token_with_cache() -> Result<String> {
     let cache = get_cache_manager();
@@ -187,16 +222,31 @@ pub async fn get_csrf_token_with_cache() -> Result<String> {
 
     // 缓存无效，重新获取
     tracing::info!("缓存无效，重新扫描获取 CSRF token");
-    let start_time = std::time::Instant::now();
-
-    // 在 blocking 任务中执行 CPU 密集型操作
-    let token = tokio::task::spawn_blocking(move || {
-        // 直接调用原始函数，不在闭包内定义
-        find_csrf_token_from_memory_direct()
-    }).await??;
-
-    let scan_duration = start_time.elapsed();
-    tracing::info!("CSRF token 扫描完成，耗时: {:?}", scan_duration);
+    
+    // 优先尝试统一检测
+    let token = match tokio::task::spawn_blocking(|| detect_server_info()).await? {
+        Ok(info) => {
+            // 提取 token（如果有）
+            let token_opt = info.csrf_token.clone();
+            
+            // 同时更新端口缓存（如果成功检测到）
+            if info.https_port.is_some() {
+                cache.set_ports("ports_info", info).await;
+            }
+            
+            // 返回 token 或回退
+            if let Some(token) = token_opt {
+                token
+            } else {
+                // 回退到旧方法（不应该发生，因为 detect_server_info 保证有 token）
+                find_csrf_token_from_memory_direct()?
+            }
+        }
+        Err(e) => {
+            tracing::warn!("统一检测失败: {}，回退到内存扫描", e);
+            tokio::task::spawn_blocking(|| find_csrf_token_from_memory_direct()).await??
+        }
+    };
 
     // 更新缓存
     cache.set_csrf_token(&cache_key, token.clone()).await;
@@ -236,34 +286,47 @@ pub async fn get_ports_with_cache() -> Result<PortInfo> {
 
     // 缓存无效，重新获取
     tracing::info!("缓存无效，重新解析端口信息");
-    let start_time = std::time::Instant::now();
+    
+    // 优先尝试统一检测（从命令行获取）
+    let port_info = match tokio::task::spawn_blocking(|| detect_server_info()).await? {
+        Ok(mut info) => {
+            // 如果命令行检测成功，尝试补充日志路径（可选）
+            if let Some(log_path) = find_latest_antigravity_log() {
+                 info.log_path = Some(log_path.to_string_lossy().to_string());
+            }
+            info
+        }
+        Err(e) => {
+            tracing::warn!("统一检测失败: {}，回退到日志解析", e);
+            
+            // 回退到解析日志
+            tokio::task::spawn_blocking(move || -> Result<PortInfo> {
+                let log_path = find_latest_antigravity_log()
+                    .ok_or_else(|| anyhow!("未找到 Antigravity.log，无法确定端口"))?;
 
-    // 在 blocking 任务中执行 I/O 密集型操作
-    let port_info = tokio::task::spawn_blocking(move || -> Result<PortInfo> {
-        // 1) 查找最新的日志文件
-        let log_path = find_latest_antigravity_log()
-            .ok_or_else(|| anyhow!("未找到 Antigravity.log，无法确定端口"))?;
+                let content = std::fs::read_to_string(&log_path)
+                    .map_err(|e| anyhow!("读取日志失败: {e}"))?;
 
-        // 2) 读取日志内容
-        let content = std::fs::read_to_string(&log_path)
-            .map_err(|e| anyhow!("读取日志失败: {e}"))?;
+                let (https_port, http_port, extension_port) = parse_ports_from_log(&content);
 
-        // 3) 解析端口信息
-        let (https_port, http_port, extension_port) = parse_ports_from_log(&content);
-
-        Ok(PortInfo {
-            https_port,
-            http_port,
-            extension_port,
-            log_path: Some(log_path.to_string_lossy().to_string()),
-        })
-    }).await??;
-
-    let parse_duration = start_time.elapsed();
-    tracing::info!("端口信息解析完成，耗时: {:?}", parse_duration);
+                Ok(PortInfo {
+                    https_port,
+                    http_port,
+                    extension_port,
+                    log_path: Some(log_path.to_string_lossy().to_string()),
+                    csrf_token: None,
+                })
+            }).await??
+        }
+    };
 
     // 更新缓存
     cache.set_ports(&cache_key, port_info.clone()).await;
+    
+    // 如果检测结果中有 Token，也更新 Token 缓存
+    if let Some(token) = &port_info.csrf_token {
+        cache.set_csrf_token("csrf_token", token.clone()).await;
+    }
 
     Ok(port_info)
 }

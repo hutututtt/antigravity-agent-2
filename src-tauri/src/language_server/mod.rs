@@ -3,6 +3,7 @@ pub mod utils;
 pub mod cache;
 pub mod types;
 pub mod cmdline_detector;
+pub mod debug_commands;
 #[cfg(target_os = "windows")]
 pub mod windows;
 #[cfg(target_os = "linux")]
@@ -11,3 +12,4 @@ pub mod linux;
 pub mod macos;
 
 pub use commands::*;
+pub use debug_commands::*;

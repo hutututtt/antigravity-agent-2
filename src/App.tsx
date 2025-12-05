@@ -84,7 +84,7 @@ function App() {
 
   return (
     <>
-      <div className="flex flex-col h-screen overflow-hidden">
+      <div className="flex flex-col h-screen">
         {isBannerVisible && cardStatus === 'expired' && (
           <ExpirationBanner
             status={cardStatus}
@@ -94,7 +94,7 @@ function App() {
           />
         )}
         <AppToolbar showImportExport={isImportExportVisible} />
-        <div className="flex-1 overflow-hidden">
+        <div className="flex-1 min-h-0">
           <AppLayout
             sidebar={
               <AppSidebar

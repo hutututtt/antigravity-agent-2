@@ -28,10 +28,12 @@ impl CacheManager {
         Self {
             csrf_cache: Arc::new(
                 moka::future::CacheBuilder::new(config.max_cache_entries)
+                    .time_to_live(std::time::Duration::from_secs(config.ttl_seconds))
                     .build()
             ),
             ports_cache: Arc::new(
                 moka::future::CacheBuilder::new(config.max_cache_entries)
+                    .time_to_live(std::time::Duration::from_secs(config.ttl_seconds))
                     .build()
             ),
         }
@@ -95,22 +97,24 @@ pub fn get_cache_manager() -> &'static Arc<CacheManager> {
 /// 2. 无缓存 -> 扫描内存 -> 缓存 -> 返回
 pub async fn get_csrf_token() -> Result<String> {
     let cache = get_cache_manager();
-
-    // 尝试从缓存获取
-    if let Some(token) = cache.get_csrf_token("csrf_token").await {
-        tracing::info!("使用缓存的 CSRF token");
-        return Ok(token);
+    let cache_key = "csrf_token";
+    
+    // 1. 尝试从缓存获取
+    if let Some(cached_token) = cache.get_csrf_token(cache_key).await {
+        tracing::info!("✅ 使用缓存的 CSRF Token (TTL: 5分钟)");
+        return Ok(cached_token);
     }
-
-    // 缓存未命中，扫描内存
-    tracing::info!("缓存未命中，开始扫描内存");
+    
+    // 2. 缓存未命中或已过期，重新扫描
+    tracing::info!("缓存未命中，开始扫描进程获取 CSRF Token");
     let token = tokio::task::spawn_blocking(|| {
         find_csrf_token_from_memory()
     }).await??;
 
-    // 缓存并返回
-    cache.set_csrf_token("csrf_token", token.clone()).await;
-    tracing::info!("CSRF token 已缓存");
+    tracing::info!("✅ 成功获取 CSRF Token: {}", token);
+    
+    // 3. 更新缓存
+    cache.set_csrf_token(cache_key, token.clone()).await;
 
     Ok(token)
 }
@@ -122,20 +126,23 @@ pub async fn get_csrf_token() -> Result<String> {
 /// 2. 无缓存 -> 解析日志 -> 缓存 -> 返回
 pub async fn get_ports() -> Result<PortInfo> {
     let cache = get_cache_manager();
-
-    // 尝试从缓存获取
-    if let Some(ports) = cache.get_ports("ports_info").await {
-        tracing::info!("使用缓存的端口信息");
-        return Ok(ports);
+    let cache_key = "ports_info";
+    
+    // 1. 尝试从缓存获取
+    if let Some(cached_ports) = cache.get_ports(cache_key).await {
+        tracing::info!("✅ 使用缓存的端口信息 (TTL: 5分钟)");
+        return Ok(cached_ports);
     }
-
-    // 缓存未命中，解析日志
-    tracing::info!("缓存未命中，开始解析日志");
+    
+    // 2. 缓存未命中或已过期，重新解析
+    tracing::info!("缓存未命中，开始解析日志文件获取端口信息");
     let ports = parse_ports_from_log_sync();
 
-    // 缓存并返回
-    cache.set_ports("ports_info", ports.clone()).await;
-    tracing::info!("端口信息已缓存");
+    tracing::info!("✅ 成功获取端口信息: https_port={:?}, http_port={:?}, extension_port={:?}", 
+        ports.https_port, ports.http_port, ports.extension_port);
+    
+    // 3. 更新缓存
+    cache.set_ports(cache_key, ports.clone()).await;
 
     Ok(ports)
 }
@@ -185,6 +192,7 @@ fn parse_ports_from_log_sync() -> PortInfo {
                         http_port,
                         extension_port,
                         log_path: Some(log_path.to_string_lossy().to_string()),
+                        csrf_token: None,
                     }
                 }
                 Err(_) => PortInfo::default(),

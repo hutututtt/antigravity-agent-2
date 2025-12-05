@@ -11,6 +11,8 @@ pub struct PortInfo {
     pub http_port: Option<u16>,
     pub extension_port: Option<u16>,
     pub log_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub csrf_token: Option<String>,
 }
 
 impl Default for PortInfo {
@@ -20,6 +22,7 @@ impl Default for PortInfo {
             http_port: None,
             extension_port: None,
             log_path: None,
+            csrf_token: None,
         }
     }
 }
@@ -75,12 +78,14 @@ pub struct UserStatusRequest {
 /// 缓存配置常量
 pub struct CacheConfig {
     pub max_cache_entries: u64,
+    pub ttl_seconds: u64,  // 缓存有效期（秒）
 }
 
 impl Default for CacheConfig {
     fn default() -> Self {
         Self {
             max_cache_entries: 100,
+            ttl_seconds: 300,  // 5 分钟 TTL
         }
     }
 }

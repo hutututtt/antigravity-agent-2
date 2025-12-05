@@ -89,16 +89,10 @@ async fn find_working_https_port(extension_port: u16, csrf_token: &str) -> Resul
     Ok(extension_port)
 }
 
-/// 前端调用 GetUserStatus 的公开命令
-#[tauri::command]
-pub async fn language_server_get_user_status(
-    api_key: String,
-) -> Result<serde_json::Value, String> {
-
-    if api_key.trim().is_empty() {
-        return Err("apiKey 不能为空".to_string());
-    }
-
+/// 执行获取用户状态的核心逻辑
+async fn do_get_user_status(api_key: &str) -> Result<serde_json::Value, String> {
+    tracing::info!("========== 开始获取用户配额 ==========");
+    
     // 1) 获取基础端口信息和 CSRF token
     let port_info = get_ports().await
         .map_err(|e| format!("获取端口信息失败: {e}"))?;
@@ -108,14 +102,18 @@ pub async fn language_server_get_user_status(
     let csrf = get_csrf_token().await
         .map_err(|e| format!("提取 csrf_token 失败: {e}"))?;
 
-    tracing::info!("提取到的 extension_port: {}", extension_port);
-    tracing::info!("提取到的 CSRF Token: {}...", &csrf[..8.min(csrf.len())]);
+    tracing::info!("========== 配额获取诊断信息 ==========");
+    tracing::info!("✅ Extension Port: {}", extension_port);
+    tracing::info!("✅ CSRF Token: {}...", &csrf[..8.min(csrf.len())]);
+    tracing::info!("📋 端口详情: https_port={:?}, http_port={:?}, extension_port={:?}", 
+        port_info.https_port, port_info.http_port, port_info.extension_port);
+    tracing::info!("========================================");
 
     // 2) 测试并找到可用的 HTTPS API 端口
     let working_port = find_working_https_port(extension_port, &csrf).await
         .map_err(|e| format!("查找可用端口失败: {e}"))?;
 
-    tracing::info!("使用端口 {} 发送 GetUserStatus 请求", working_port);
+    tracing::info!("🎯 使用端口 {} 发送 GetUserStatus 请求", working_port);
 
     // 3) 构造 URL 和请求体
     let target_url = format!(
@@ -132,15 +130,13 @@ pub async fn language_server_get_user_status(
 
     let metadata = RequestMetadata {
         // 插件不发送 API Key，只发送基础元数据
-        // api_key: api_key.clone(), 
+        // api_key: api_key.to_string(), 
         ..Default::default()
     };
 
     let request_body = UserStatusRequest { metadata };
     let body_bytes = serde_json::to_vec(&request_body)
         .map_err(|e| format!("序列化请求体失败: {e}"))?;
-
-    tracing::info!("完整 CSRF Token: {}", csrf);
 
     let mut req = client.post(&target_url);
 
@@ -160,16 +156,6 @@ pub async fn language_server_get_user_status(
         // 注意：插件使用 X-Codeium-Csrf-Token (首字母大写)
         .header("X-Codeium-Csrf-Token", csrf.clone());
 
-
-    // 打印完整的请求信息
-    let body_str = String::from_utf8_lossy(&body_bytes);
-    tracing::info!(
-        "发送 GetUserStatus 请求: URL={}, CSRF Token={}, Body={}",
-        target_url,
-        csrf,
-        body_str
-    );
-
     let resp = req
         .body(body_bytes)
         .send()
@@ -182,13 +168,52 @@ pub async fn language_server_get_user_status(
         .await
         .map_err(|e| format!("读取响应失败: {e}"))?;
 
-    tracing::info!("GetUserStatus 响应状态: {}, Body: {}", status, String::from_utf8_lossy(&bytes));
+    if !status.is_success() {
+        tracing::error!("❌ GetUserStatus 请求失败: 状态码={}, Body={}", status, String::from_utf8_lossy(&bytes));
+        return Err(format!("请求返回错误状态码: {}, Body: {}", status, String::from_utf8_lossy(&bytes)));
+    }
 
-    // 直接解析为 JSON，不定义复杂的数据结构
+    tracing::info!("✅ GetUserStatus 响应成功: 状态码={}", status);
+
+    // 直接解析为 JSON
     let json: serde_json::Value = serde_json::from_slice(&bytes)
         .map_err(|e| format!("解析 JSON 失败: {e}; body={}", String::from_utf8_lossy(&bytes)))?;
 
     Ok(json)
+}
+
+/// 前端调用 GetUserStatus 的公开命令
+#[tauri::command]
+pub async fn language_server_get_user_status(
+    api_key: String,
+) -> Result<serde_json::Value, String> {
+
+    if api_key.trim().is_empty() {
+        return Err("apiKey 不能为空".to_string());
+    }
+
+    // 第一次尝试
+    match do_get_user_status(&api_key).await {
+        Ok(json) => Ok(json),
+        Err(e) => {
+            tracing::warn!("第一次获取配额失败: {}。尝试清空缓存并重试...", e);
+            
+            // 清空缓存
+            clear_all().await;
+            
+            // 第二次尝试 (强制重新扫描)
+            match do_get_user_status(&api_key).await {
+                Ok(json) => {
+                    tracing::info!("重试成功！");
+                    Ok(json)
+                },
+                Err(e2) => {
+                    tracing::error!("重试仍然失败: {}", e2);
+                    Err(format!("获取配额失败 (已重试): {}", e2))
+                }
+            }
+        }
+    }
 }
 
 
