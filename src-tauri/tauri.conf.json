@@ -28,6 +28,14 @@
       "digestAlgorithm": "sha256",
       "timestampUrl": ""
     },
+    "macOS": {
+      "minimumSystemVersion": "10.13",
+      "exceptionDomain": "47.93.28.155",
+      "infoPlist": "Info.plist"
+    },
+    "iOS": {
+      "minimumSystemVersion": "13.0"
+    },
     "targets": [
       "nsis",
       "dmg",
