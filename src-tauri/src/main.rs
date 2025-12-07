@@ -180,23 +180,16 @@ fn main() {
         ])
         .build(tauri::generate_context!())
         .expect("error while running tauri application")
-        .run(|app_handle, event| {
-            if let tauri::RunEvent::Reopen { .. } = event {
-                tracing::info!(target: "app::event", "📦 收到 Reopen 事件 (Dock 图标点击)");
-                if let Some(window) = app_handle.get_webview_window("main") {
-                    println!("📋 尝试显示主窗口");
-                    let _ = window.show();
-                    let _ = window.set_focus();
-                    
-                    // macOS hack: 强制置顶一下以确保窗口弹出
-                    #[cfg(target_os = "macos")]
-                    {
-                        let _ = window.set_always_on_top(true);
-                        let _ = window.set_always_on_top(false);
-                    }
-                } else {
-                    tracing::warn!(target: "app::event", "⚠️ Reopen 事件：找不到主窗口");
+        .run(|_app_handle, event| {
+            // Tauri 2.x 中 RunEvent::Reopen 已被移除
+            // macOS Dock 点击事件现在通过 system_tray/manager.rs 中的
+            // setup_dock_click_handler 处理
+            match event {
+                tauri::RunEvent::ExitRequested { api, .. } => {
+                    // 阻止默认退出行为，改为最小化到托盘
+                    api.prevent_exit();
                 }
+                _ => {}
             }
         });
 }

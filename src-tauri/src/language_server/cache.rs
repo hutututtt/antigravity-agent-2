@@ -5,7 +5,6 @@
 
 use std::sync::Arc;
 use anyhow::{Result, anyhow};
-use regex::Regex;
 
 use super::types::{PortInfo, CacheStats, CacheConfig};
 use super::utils::{find_latest_antigravity_log, parse_ports_from_log};

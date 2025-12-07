@@ -154,7 +154,6 @@ impl CmdLineDetector {
 
     #[cfg(target_os = "windows")]
     fn get_cmdline_windows(&self, pid: u32) -> Result<String> {
-        use std::time::Duration;
         
         tracing::debug!("[CmdLineDetector] Attempting to get command line for PID {}", pid);
         

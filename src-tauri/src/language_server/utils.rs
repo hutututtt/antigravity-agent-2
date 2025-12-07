@@ -10,11 +10,9 @@ use read_process_memory as _;
 use super::cache::get_cache_manager;
 use super::types::{PortInfo, CacheInitResult};
 
-#[cfg(target_os = "windows")]
-use crate::language_server::windows::scan_process_for_token;
 
-#[cfg(target_os = "linux")]
-use crate::language_server::linux::scan_process_for_token;
+
+
 
 pub(crate) const SCAN_AHEAD: usize = 200;
 pub(crate) const CHUNK_SIZE: usize = 512 * 1024; // 512KB 分块读取，降低单次读耗时

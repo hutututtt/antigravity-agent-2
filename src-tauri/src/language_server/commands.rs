@@ -90,7 +90,7 @@ async fn find_working_https_port(extension_port: u16, csrf_token: &str) -> Resul
 }
 
 /// 执行获取用户状态的核心逻辑
-async fn do_get_user_status(api_key: &str) -> Result<serde_json::Value, String> {
+async fn do_get_user_status(_api_key: &str) -> Result<serde_json::Value, String> {
     tracing::info!("========== 开始获取用户配额 ==========");
     
     // 1) 获取基础端口信息和 CSRF token
