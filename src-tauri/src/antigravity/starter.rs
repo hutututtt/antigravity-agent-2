@@ -225,12 +225,17 @@ fn try_start_from_path(path: &PathBuf) -> Result<String, String> {
     // Windows 和 Linux 直接执行二进制文件（静默启动）
     #[cfg(not(target_os = "macos"))]
     {
-        // Windows：重定向输出到 null 设备
+        // Windows：使用 CREATE_NO_WINDOW 标志隐藏控制台窗口
         #[cfg(target_os = "windows")]
         {
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x08000000;
+            
             Command::new(path)
+                .creation_flags(CREATE_NO_WINDOW)  // 关键：防止创建控制台窗口
                 .stdout(Stdio::null())
                 .stderr(Stdio::null())
+                .stdin(Stdio::null())  // 也重定向 stdin
                 .spawn()
                 .map_err(|e| format!("启动失败: {}", e))?;
         }
@@ -241,6 +246,7 @@ fn try_start_from_path(path: &PathBuf) -> Result<String, String> {
             Command::new(path)
                 .stdout(Stdio::null())
                 .stderr(Stdio::null())
+                .stdin(Stdio::null())
                 .spawn()
                 .map_err(|e| format!("启动失败: {}", e))?;
         }
@@ -254,16 +260,41 @@ fn try_start_from_commands(commands: Vec<&str>) -> Result<String, String> {
     let mut errors = Vec::new();
 
     for cmd in commands {
-        match Command::new(cmd)
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .spawn()
+        #[cfg(target_os = "windows")]
         {
-            Ok(_) => {
-                return Ok("Antigravity 已启动".to_string());
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x08000000;
+            
+            match Command::new(cmd)
+                .creation_flags(CREATE_NO_WINDOW)
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .stdin(Stdio::null())
+                .spawn()
+            {
+                Ok(_) => {
+                    return Ok("Antigravity 已启动".to_string());
+                }
+                Err(e) => {
+                    errors.push(format!("{}命令: {}", cmd, e));
+                }
             }
-            Err(e) => {
-                errors.push(format!("{}命令: {}", cmd, e));
+        }
+        
+        #[cfg(not(target_os = "windows"))]
+        {
+            match Command::new(cmd)
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .stdin(Stdio::null())
+                .spawn()
+            {
+                Ok(_) => {
+                    return Ok("Antigravity 已启动".to_string());
+                }
+                Err(e) => {
+                    errors.push(format!("{}命令: {}", cmd, e));
+                }
             }
         }
     }

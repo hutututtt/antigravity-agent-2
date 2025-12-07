@@ -79,7 +79,7 @@ export function AppUserPanel() {
   useEffect(() => {
     const handleAccountsUpdated = () => {
       // 刷新账户列表
-      antigravityAccount.loadUsers();
+      antigravityAccount.getUsers();
     };
 
     window.addEventListener('antigravity_accounts_updated', handleAccountsUpdated);
@@ -247,23 +247,53 @@ export function AppUserPanel() {
   };
 
 
-  // 轮询更新当前用户的配额信息
+  // 轮询更新当前用户的配额信息（带失败保护）
   useEffect(() => {
-    const fetchCurrentUserQuota = () => {
+    let failureCount = 0;
+    const MAX_FAILURES = 3; // 连续失败3次后停止轮询
+    let intervalId: NodeJS.Timeout | null = null; // Declare intervalId here
+
+    const fetchCurrentUserQuota = async () => {
       if (currentAntigravityAccount) {
-        languageServerUserInfo.fetchData(currentAntigravityAccount);
+        try {
+          const success = await languageServerUserInfo.fetchData(currentAntigravityAccount);
+          if (success) {
+            failureCount = 0; // 成功后重置失败计数
+          } else {
+            failureCount++;
+            console.warn(`[AppUserPanel] 配额获取失败 (${failureCount}/${MAX_FAILURES})`);
+          }
+        } catch (error) {
+          failureCount++;
+          console.error(`[AppUserPanel] 配额获取异常 (${failureCount}/${MAX_FAILURES}):`, error);
+        }
+
+        // 如果连续失败次数过多，停止轮询
+        if (failureCount >= MAX_FAILURES) {
+          console.warn('[AppUserPanel] 配额获取连续失败，停止轮询。请检查 Antigravity Language Server 是否正常运行。');
+          if (intervalId) {
+            clearInterval(intervalId);
+            intervalId = null; // Clear it to prevent further attempts to clear
+          }
+        }
       }
     };
 
-    // 初始加载
+    // 初始加载（延迟2秒，避免启动时的竞争）
+    let initialTimeout: NodeJS.Timeout | null = null;
     if (currentAntigravityAccount) {
-      fetchCurrentUserQuota();
+      initialTimeout = setTimeout(() => {
+        fetchCurrentUserQuota();
+      }, 2000);
     }
 
     // 每60秒轮询一次
-    const intervalId = setInterval(fetchCurrentUserQuota, 60000);
+    intervalId = setInterval(fetchCurrentUserQuota, 60000);
 
-    return () => clearInterval(intervalId);
+    return () => {
+      if (initialTimeout) clearTimeout(initialTimeout);
+      if (intervalId) clearInterval(intervalId);
+    };
   }, [currentAntigravityAccount?.id]);
 
   return (
@@ -319,7 +349,7 @@ export function AppUserPanel() {
                 <Shield className="h-4 w-4 text-green-600 dark:text-green-400" />
               </div>
               <div>
-                <p className="text-xl font-bold text-gray-900 dark:text-gray-100">v1.0</p>
+                <p className="text-xl font-bold text-gray-900 dark:text-gray-100">v1.0.0</p>
                 <p className="text-[10px] text-gray-600 dark:text-gray-400">应用版本</p>
               </div>
             </div>
@@ -353,18 +383,14 @@ export function AppUserPanel() {
         <div className="text-sm font-bold text-gray-600 mb-4 flex items-center justify-between">
           <span className="flex items-center gap-2">账户列表</span>
           <button
-            onClick={async () => {
-              try {
-                await antigravityAccount.getUsers();
-                toast.success('账户列表已刷新');
-              } catch (error) {
-                toast.error(`刷新失败: ${error}`);
-              }
+            onClick={() => {
+              // 刷新整个页面
+              window.location.reload();
             }}
             className="text-xs text-gray-600 hover:text-gray-800 transition-colors flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50"
           >
             <Activity className="w-3.5 h-3.5" />
-            刷新列表
+            刷新页面
           </button>
         </div>
 

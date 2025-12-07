@@ -155,15 +155,42 @@ impl SystemTrayManager {
                 });
             })
             .on_tray_icon_event(|tray, event| {
+                tracing::debug!("[SystemTray] Tray icon event received: {:?}", event);
+                
                 if let TrayIconEvent::Click {
                     button: MouseButton::Left,
                     ..
                 } = event
                 {
+                    tracing::info!("[SystemTray] Left click detected on tray icon");
                     let app = tray.app_handle();
+                    
                     if let Some(window) = app.get_webview_window("main") {
-                        let _ = window.show();
-                        let _ = window.set_focus();
+                        tracing::info!("[SystemTray] Main window found, attempting to show");
+                        
+                        // 先尝试显示窗口
+                        match window.show() {
+                            Ok(_) => tracing::info!("[SystemTray] Window show() succeeded"),
+                            Err(e) => tracing::error!("[SystemTray] Window show() failed: {}", e),
+                        }
+                        
+                        // 然后设置焦点
+                        match window.set_focus() {
+                            Ok(_) => tracing::info!("[SystemTray] Window set_focus() succeeded"),
+                            Err(e) => tracing::error!("[SystemTray] Window set_focus() failed: {}", e),
+                        }
+                        
+                        // 在 macOS 上，可能需要额外的操作
+                        #[cfg(target_os = "macos")]
+                        {
+                            if let Err(e) = window.set_always_on_top(true) {
+                                tracing::warn!("[SystemTray] Failed to set always on top: {}", e);
+                            }
+                            // 立即取消置顶
+                            let _ = window.set_always_on_top(false);
+                        }
+                    } else {
+                        tracing::error!("[SystemTray] Main window not found!");
                     }
                 }
             });

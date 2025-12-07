@@ -7,6 +7,7 @@ use tracing_subscriber::prelude::*;
 use std::fs;
 use std::path::PathBuf;
 use dirs;
+use tauri::Manager;
 
 // Modules
 mod antigravity;
@@ -177,6 +178,25 @@ fn main() {
             initialize_language_server_cache,
             debug_get_cache_info,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while running tauri application")
+        .run(|app_handle, event| {
+            if let tauri::RunEvent::Reopen { .. } = event {
+                tracing::info!(target: "app::event", "📦 收到 Reopen 事件 (Dock 图标点击)");
+                if let Some(window) = app_handle.get_webview_window("main") {
+                    println!("📋 尝试显示主窗口");
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                    
+                    // macOS hack: 强制置顶一下以确保窗口弹出
+                    #[cfg(target_os = "macos")]
+                    {
+                        let _ = window.set_always_on_top(true);
+                        let _ = window.set_always_on_top(false);
+                    }
+                } else {
+                    tracing::warn!(target: "app::event", "⚠️ Reopen 事件：找不到主窗口");
+                }
+            }
+        });
 }

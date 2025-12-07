@@ -101,9 +101,10 @@ const BusinessSettingsDialog: React.FC<BusinessSettingsDialogProps> = ({
     }
   };
 
-  const handleSystemTrayToggle = async () => {
+  const handleSystemTrayToggle = async (newState?: boolean) => {
     setIsTrayLoading(true);
     try {
+      // 后端的 toggle 命令会自动切换状态，不需要传递参数
       const result = await SystemTrayService.toggleSystemTray();
       setIsSystemTrayEnabled(result.enabled);
       showMessage(result.message, result.enabled ? 'success' : 'info');

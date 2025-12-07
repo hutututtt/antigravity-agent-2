@@ -36,10 +36,9 @@ impl CmdLineDetector {
             match self.extract_from_cmdline(pid) {
                 Ok(Some(info)) => {
                     tracing::info!(
-                        "成功从 PID {} 提取信息: extension_port={:?}, csrf_token={}...",
+                        "[CmdLineDetector] 成功从 PID {} 提取信息: extension_port={:?}, csrf_token=[present]",
                         pid,
-                        info.extension_port,
-                        &info.csrf_token[..8.min(info.csrf_token.len())]
+                        info.extension_port
                     );
                     return Ok(info);
                 }
@@ -155,25 +154,39 @@ impl CmdLineDetector {
 
     #[cfg(target_os = "windows")]
     fn get_cmdline_windows(&self, pid: u32) -> Result<String> {
-        // 尝试使用 PowerShell
-        let output = Command::new("powershell")
+        use std::time::Duration;
+        
+        tracing::debug!("[CmdLineDetector] Attempting to get command line for PID {}", pid);
+        
+        // 尝试使用 PowerShell（优先，更可靠）
+        tracing::debug!("[CmdLineDetector] Trying PowerShell method...");
+        match Command::new("powershell")
             .args(&[
                 "-NoProfile",
                 "-Command",
                 &format!("(Get-Process -Id {}).CommandLine", pid),
             ])
             .output()
-            .map_err(|e| anyhow!("执行 PowerShell 命令失败: {}", e))?;
-
-        if output.status.success() {
-            let cmdline = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            if !cmdline.is_empty() {
-                return Ok(cmdline);
+        {
+            Ok(output) if output.status.success() => {
+                let cmdline = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                if !cmdline.is_empty() {
+                    tracing::info!("[CmdLineDetector] PowerShell method succeeded");
+                    return Ok(cmdline);
+                }
+                tracing::warn!("[CmdLineDetector] PowerShell returned empty output");
+            }
+            Ok(_) => {
+                tracing::warn!("[CmdLineDetector] PowerShell command failed");
+            }
+            Err(e) => {
+                tracing::warn!("[CmdLineDetector] PowerShell execution error: {}", e);
             }
         }
 
-        // PowerShell 失败，尝试 WMIC
-        let output = Command::new("wmic")
+        // PowerShell 失败，尝试 WMIC（降级方案）
+        tracing::debug!("[CmdLineDetector] Trying WMIC method...");
+        match Command::new("wmic")
             .args(&[
                 "process",
                 "where",
@@ -183,22 +196,31 @@ impl CmdLineDetector {
                 "/value",
             ])
             .output()
-            .map_err(|e| anyhow!("执行 WMIC 命令失败: {}", e))?;
-
-        if !output.status.success() {
-            return Err(anyhow!("WMIC 命令执行失败"));
-        }
-
-        let output_str = String::from_utf8_lossy(&output.stdout);
-        
-        // 解析 WMIC 输出: CommandLine=...
-        for line in output_str.lines() {
-            if let Some(cmdline) = line.strip_prefix("CommandLine=") {
-                return Ok(cmdline.trim().to_string());
+        {
+            Ok(output) if output.status.success() => {
+                let output_str = String::from_utf8_lossy(&output.stdout);
+                
+                // 解析 WMIC 输出: CommandLine=...
+                for line in output_str.lines() {
+                    if let Some(cmdline) = line.strip_prefix("CommandLine=") {
+                        let cmdline = cmdline.trim().to_string();
+                        if !cmdline.is_empty() {
+                            tracing::info!("[CmdLineDetector] WMIC method succeeded");
+                            return Ok(cmdline);
+                        }
+                    }
+                }
+                tracing::warn!("[CmdLineDetector] WMIC returned no CommandLine");
+            }
+            Ok(_) => {
+                tracing::warn!("[CmdLineDetector] WMIC command failed (may be deprecated on Windows 11)");
+            }
+            Err(e) => {
+                tracing::warn!("[CmdLineDetector] WMIC execution error: {}", e);
             }
         }
 
-        Err(anyhow!("未能从 WMIC 输出中提取命令行"))
+        Err(anyhow!("未能从 PowerShell 或 WMIC 中提取命令行"))
     }
 
     /// 从命令行中提取端口号

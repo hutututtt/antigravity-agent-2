@@ -275,3 +275,32 @@ pub async fn restore_all_antigravity_data(backup_file_path: PathBuf) -> Result<S
 
     Ok(format!("✅ 恢复成功! {}", msg))
 }
+
+/// 更新备份文件的 last_switched 字段
+pub fn update_backup_last_switched(backup_file_path: &PathBuf) -> Result<(), String> {
+    if !backup_file_path.exists() {
+        return Err(format!("备份文件不存在: {}", backup_file_path.display()));
+    }
+
+    // 读取备份文件
+    let content = fs::read_to_string(backup_file_path)
+        .map_err(|e| format!("读取备份文件失败: {}", e))?;
+    
+    let mut backup_data: Value = serde_json::from_str(&content)
+        .map_err(|e| format!("解析备份文件失败: {}", e))?;
+    
+    // 更新 last_switched 字段为当前时间
+    let now = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+    backup_data["last_switched"] = Value::String(now.clone());
+    
+    // 写回文件
+    let updated_content = serde_json::to_string_pretty(&backup_data)
+        .map_err(|e| format!("序列化备份文件失败: {}", e))?;
+    
+    fs::write(backup_file_path, updated_content)
+        .map_err(|e| format!("写入备份文件失败: {}", e))?;
+    
+    tracing::debug!(target: "restore::update_timestamp", last_switched = %now, "已更新 last_switched 时间戳");
+    
+    Ok(())
+}

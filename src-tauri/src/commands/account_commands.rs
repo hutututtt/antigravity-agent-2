@@ -183,13 +183,17 @@ fn parse_backup_to_account(
         .and_then(|v| v.as_str())
         .unwrap_or("");
 
-    // 从文件修改时间获取 last_switched
-    let metadata = fs::metadata(file_path)
-        .map_err(|e| format!("获取文件元数据失败: {}", e))?;
-    let modified_time = metadata.modified()
-        .map_err(|e| format!("获取修改时间失败: {}", e))?;
-    let datetime: DateTime<Local> = DateTime::from(modified_time);
-    let last_switched = datetime.format("%Y-%m-%d %H:%M:%S").to_string();
+    // 优先从备份数据中读取 last_switched 字段，否则使用文件修改时间
+    let last_switched = if let Some(ls_str) = backup_data.get("last_switched").and_then(|v| v.as_str()) {
+        ls_str.to_string()
+    } else {
+        let metadata = fs::metadata(file_path)
+            .map_err(|e| format!("获取文件元数据失败: {}", e))?;
+        let modified_time = metadata.modified()
+            .map_err(|e| format!("获取修改时间失败: {}", e))?;
+        let datetime: DateTime<Local> = DateTime::from(modified_time);
+        datetime.format("%Y-%m-%d %H:%M:%S").to_string()
+    };
 
     // 从备份数据中提取认证状态信息
     let auth_status = backup_data
@@ -470,7 +474,15 @@ pub async fn restore_antigravity_account(account_name: String) -> Result<String,
     let backup_file = config_dir.join(format!("{}.json", account_name));
 
     // 2. 调用统一的恢复函数
-    crate::antigravity::restore::restore_all_antigravity_data(backup_file).await
+    let result = crate::antigravity::restore::restore_all_antigravity_data(backup_file.clone()).await?;
+    
+    // 3. 恢复成功后，更新 last_switched 时间戳
+    if let Err(e) = crate::antigravity::restore::update_backup_last_switched(&backup_file) {
+        tracing::warn!(target: "account::restore", error = %e, "更新 last_switched 时间戳失败");
+        // 不影响恢复结果，只记录警告
+    }
+    
+    Ok(result)
 }
 
 /// 切换到 Antigravity 账户（调用 restore_antigravity_account）
