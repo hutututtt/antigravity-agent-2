@@ -2,7 +2,7 @@ name: AutoBuild
 
 on:
   push:
-    branches: [dev]         # dev 分支 push 时触发
+    branches: [main, dev]   # main 和 dev 分支 push 时触发
   schedule:
     - cron: '0 0 * * *'    # 每天 00:00 UTC 构建一次 Nightly
   workflow_dispatch:        # 手动触发
@@ -22,10 +22,8 @@ jobs:
   prepare-release:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout dev branch
+      - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          ref: dev
 
       - name: Create or update autobuild release
         uses: softprops/action-gh-release@v2
@@ -91,10 +89,8 @@ jobs:
     runs-on: ${{ matrix.runs-on }}
 
     steps:
-      - name: Checkout dev branch
+      - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          ref: dev
 
       - name: Install dependencies (ubuntu only)
         if: matrix.platform == 'ubuntu-latest'
