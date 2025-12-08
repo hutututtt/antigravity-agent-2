@@ -12,7 +12,10 @@ impl CmdLineDetector {
     pub fn new() -> Self {
         Self {
             process_name_patterns: vec![
-                "language_server".to_string(),
+                "language_server_windows_x64".to_string(),  // Windows 完整进程名
+                "language_server_macos".to_string(),        // macOS 进程名
+                "language_server_linux".to_string(),        // Linux 进程名
+                "language_server".to_string(),              // 通用后备
                 "antigravity".to_string(),
                 "windsurf".to_string(),
             ],
@@ -154,72 +157,93 @@ impl CmdLineDetector {
 
     #[cfg(target_os = "windows")]
     fn get_cmdline_windows(&self, pid: u32) -> Result<String> {
-        
         tracing::debug!("[CmdLineDetector] Attempting to get command line for PID {}", pid);
         
-        // 尝试使用 PowerShell（优先，更可靠）
-        tracing::debug!("[CmdLineDetector] Trying PowerShell method...");
-        match Command::new("powershell")
-            .args(&[
-                "-NoProfile",
-                "-Command",
-                &format!("(Get-Process -Id {}).CommandLine", pid),
-            ])
-            .output()
-        {
-            Ok(output) if output.status.success() => {
-                let cmdline = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        // 方法 1: 使用 sysinfo crate（最可靠，跨平台）
+        tracing::debug!("[CmdLineDetector] Trying sysinfo method...");
+        let mut system = System::new();
+        system.refresh_processes();
+        
+        if let Some(process) = system.process(sysinfo::Pid::from_u32(pid)) {
+            let cmd = process.cmd();
+            if !cmd.is_empty() {
+                let cmdline = cmd.join(" ");
                 if !cmdline.is_empty() {
-                    tracing::info!("[CmdLineDetector] PowerShell method succeeded");
+                    tracing::info!("[CmdLineDetector] sysinfo method succeeded");
                     return Ok(cmdline);
                 }
-                tracing::warn!("[CmdLineDetector] PowerShell returned empty output");
-            }
-            Ok(_) => {
-                tracing::warn!("[CmdLineDetector] PowerShell command failed");
-            }
-            Err(e) => {
-                tracing::warn!("[CmdLineDetector] PowerShell execution error: {}", e);
             }
         }
-
-        // PowerShell 失败，尝试 WMIC（降级方案）
-        tracing::debug!("[CmdLineDetector] Trying WMIC method...");
-        match Command::new("wmic")
-            .args(&[
-                "process",
-                "where",
-                &format!("ProcessId={}", pid),
-                "get",
-                "CommandLine",
-                "/value",
-            ])
-            .output()
+        
+        // 方法 2: 使用 Get-CimInstance（推荐，无需管理员权限）
+        tracing::debug!("[CmdLineDetector] Trying Get-CimInstance method...");
+        
+        #[cfg(target_os = "windows")]
         {
-            Ok(output) if output.status.success() => {
-                let output_str = String::from_utf8_lossy(&output.stdout);
-                
-                // 解析 WMIC 输出: CommandLine=...
-                for line in output_str.lines() {
-                    if let Some(cmdline) = line.strip_prefix("CommandLine=") {
-                        let cmdline = cmdline.trim().to_string();
-                        if !cmdline.is_empty() {
-                            tracing::info!("[CmdLineDetector] WMIC method succeeded");
-                            return Ok(cmdline);
-                        }
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x08000000;
+            
+            match Command::new("powershell")
+                .creation_flags(CREATE_NO_WINDOW)  // 隐藏窗口
+                .args(&[
+                    "-NoProfile",
+                    "-Command",
+                    &format!("(Get-CimInstance Win32_Process -Filter \"ProcessId = {}\").CommandLine", pid),
+                ])
+                .output()
+            {
+                Ok(output) if output.status.success() => {
+                    let cmdline = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                    if !cmdline.is_empty() && cmdline != "null" {
+                        tracing::info!("[CmdLineDetector] Get-CimInstance method succeeded");
+                        return Ok(cmdline);
                     }
+                    tracing::debug!("[CmdLineDetector] Get-CimInstance returned empty or null output");
                 }
-                tracing::warn!("[CmdLineDetector] WMIC returned no CommandLine");
+                Ok(_) => {
+                    tracing::debug!("[CmdLineDetector] Get-CimInstance command failed");
+                }
+                Err(e) => {
+                    tracing::debug!("[CmdLineDetector] Get-CimInstance execution error: {}", e);
+                }
             }
-            Ok(_) => {
-                tracing::warn!("[CmdLineDetector] WMIC command failed (may be deprecated on Windows 11)");
-            }
-            Err(e) => {
-                tracing::warn!("[CmdLineDetector] WMIC execution error: {}", e);
+        }
+        
+        // 方法 3: 使用 Get-WmiObject（后备方案，兼容旧系统）
+        tracing::debug!("[CmdLineDetector] Trying Get-WmiObject method...");
+        
+        #[cfg(target_os = "windows")]
+        {
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x08000000;
+            
+            match Command::new("powershell")
+                .creation_flags(CREATE_NO_WINDOW)  // 隐藏窗口
+                .args(&[
+                    "-NoProfile",
+                    "-Command",
+                    &format!("(Get-WmiObject Win32_Process -Filter \"ProcessId = {}\").CommandLine", pid),
+                ])
+                .output()
+            {
+                Ok(output) if output.status.success() => {
+                    let cmdline = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                    if !cmdline.is_empty() && cmdline != "null" {
+                        tracing::info!("[CmdLineDetector] Get-WmiObject method succeeded");
+                        return Ok(cmdline);
+                    }
+                    tracing::debug!("[CmdLineDetector] Get-WmiObject returned empty or null output");
+                }
+                Ok(_) => {
+                    tracing::debug!("[CmdLineDetector] Get-WmiObject command failed");
+                }
+                Err(e) => {
+                    tracing::debug!("[CmdLineDetector] Get-WmiObject execution error: {}", e);
+                }
             }
         }
 
-        Err(anyhow!("未能从 PowerShell 或 WMIC 中提取命令行"))
+        Err(anyhow!("无法获取进程 {} 的命令行参数", pid))
     }
 
     /// 从命令行中提取端口号
@@ -241,64 +265,30 @@ impl CmdLineDetector {
 
     /// 从命令行中提取 CSRF Token
     fn extract_csrf_token(&self, cmdline: &str) -> Result<Option<String>> {
-        // 1. 优先尝试匹配明确的参数 --csrf_token=UUID 或 --csrf_token UUID
-        // 忽略大小写
-        let explicit_re = Regex::new(r"(?i)--csrf_token[=\s]+([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})")?;
+        // 1. 优先尝试匹配明确的参数 --csrf_token=TOKEN 或 --csrf_token TOKEN
+        // 使用宽松的匹配模式，匹配任意十六进制字符串（包括连字符）
+        // 参考 AntigravityQuotaWatcher 的实现: /--csrf_token[=\\s]+([a-f0-9\\-]+)/i
+        let explicit_re = Regex::new(r"(?i)--csrf_token[=\s]+([a-f0-9\-]+)")?;
         
         if let Some(caps) = explicit_re.captures(cmdline) {
             if let Some(token) = caps.get(1) {
-                tracing::info!("通过 --csrf_token 参数找到 Token");
-                return Ok(Some(token.as_str().to_string()));
+                let token_str = token.as_str().to_string();
+                tracing::info!("通过 --csrf_token 参数找到 Token: {}...", &token_str[..token_str.len().min(8)]);
+                return Ok(Some(token_str));
             }
         }
 
         // 2. 尝试匹配 manager_token (有时用这个名字)
-        let manager_re = Regex::new(r"(?i)--manager_token[=\s]+([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})")?;
+        let manager_re = Regex::new(r"(?i)--manager_token[=\s]+([a-f0-9\-]+)")?;
         if let Some(caps) = manager_re.captures(cmdline) {
             if let Some(token) = caps.get(1) {
-                tracing::info!("通过 --manager_token 参数找到 Token");
-                return Ok(Some(token.as_str().to_string()));
+                let token_str = token.as_str().to_string();
+                tracing::info!("通过 --manager_token 参数找到 Token: {}...", &token_str[..token_str.len().min(8)]);
+                return Ok(Some(token_str));
             }
         }
 
-        // 3. 最后的手段：查找所有 UUID，并尝试找到最像 CSRF token 的那个
-        // UUID 格式: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-        let uuid_re = Regex::new(
-            r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
-        )?;
-
-        // 在命令行中查找所有 UUID
-        let uuids: Vec<&str> = uuid_re
-            .find_iter(cmdline)
-            .map(|m| m.as_str())
-            .collect();
-
-        if uuids.is_empty() {
-            return Ok(None);
-        }
-
-        // 如果找到多个 UUID，优先选择在 csrf 相关参数附近的
-        for uuid in &uuids {
-            // 检查 UUID 前后是否有 csrf 相关的关键词
-            if let Some(pos) = cmdline.find(uuid) {
-                let start = pos.saturating_sub(50);
-                let end = (pos + uuid.len() + 50).min(cmdline.len());
-                let context = &cmdline[start..end].to_lowercase();
-                
-                if context.contains("csrf") || context.contains("token") {
-                    tracing::info!("通过上下文推断找到 Token: {}...", &uuid[..8]);
-                    return Ok(Some(uuid.to_string()));
-                }
-            }
-        }
-
-        // 如果没有找到明确的 csrf token，但只有一个 UUID，那可能就是它
-        if uuids.len() == 1 {
-             tracing::info!("未找到明确标识，但命令行中仅有一个 UUID，假定为 Token");
-             return Ok(Some(uuids[0].to_string()));
-        }
-
-        tracing::warn!("找到多个 UUID 但无法确定哪一个是 CSRF Token，放弃猜测");
+        tracing::warn!("未能从命令行中提取 CSRF Token");
         Ok(None)
     }
 }
