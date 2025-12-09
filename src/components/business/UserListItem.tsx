@@ -45,6 +45,11 @@ export const UserListItem: React.FC<UserListItemProps> = ({
   const [remarkValue, setRemarkValue] = useState(user.remark || '');
   const [isSavingRemark, setIsSavingRemark] = useState(false);
 
+  // 同步备注值：当 user.remark 变化时更新本地状态
+  useEffect(() => {
+    setRemarkValue(user.remark || '');
+  }, [user.remark]);
+
   // 计算 tooltip 位置
   useEffect(() => {
     if (showTooltip && quotaRef.current) {
